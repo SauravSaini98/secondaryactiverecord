@@ -1,10 +1,11 @@
 # frozen_string_literal: true
 
-version = File.read(File.expand_path("../RAILS_VERSION", __dir__)).strip
+# version = File.read(File.expand_path("../RAILS_VERSION", __dir__)).strip
+version = "5.2.1"
 
 Gem::Specification.new do |s|
   s.platform    = Gem::Platform::RUBY
-  s.name        = "activerecord"
+  s.name        = "secondaryactiverecord"
   s.version     = version
   s.summary     = "Object-relational mapper framework (part of Rails)."
   s.description = "Databases on Rails. Build a persistent domain model by mapping database tables to Ruby classes. Strong conventions for associations, validations, aggregations, migrations, and testing come baked-in."

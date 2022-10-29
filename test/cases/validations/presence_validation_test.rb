@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 require "cases/helper"
-require "models/man"
+require "models/human"
 require "models/face"
 require "models/interest"
 require "models/speedometer"
 require "models/dashboard"
 
-class PresenceValidationTest < SecondaryActiveRecord::TestCase
-  class Boy < Man; end
+class PresenceValidationTest < ActiveRecord::TestCase
+  class Boy < Human; end
 
   repair_validations(Boy)
 
@@ -69,7 +69,7 @@ class PresenceValidationTest < SecondaryActiveRecord::TestCase
 
   def test_validates_presence_of_virtual_attribute_on_model
     repair_validations(Interest) do
-      Interest.send(:attr_accessor, :abbreviation)
+      Interest.attr_accessor(:abbreviation)
       Interest.validates_presence_of(:topic)
       Interest.validates_presence_of(:abbreviation)
 

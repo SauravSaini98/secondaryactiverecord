@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class Admin::Account < SecondaryActiveRecord::Base
+class Admin::Account < ActiveRecord::Base
   has_many :users
 end

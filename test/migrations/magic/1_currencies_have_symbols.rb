@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 # coding: ISO-8859-15
 
-class CurrenciesHaveSymbols < SecondaryActiveRecord::Migration::Current
+class CurrenciesHaveSymbols < ActiveRecord::Migration::Current
   def self.up
     # We use € for default currency symbol
     add_column "currencies", "symbol", :string, default: "€"

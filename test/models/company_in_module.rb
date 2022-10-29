@@ -4,7 +4,7 @@ require "active_support/core_ext/object/with_options"
 
 module MyApplication
   module Business
-    class Company < SecondaryActiveRecord::Base
+    class Company < ActiveRecord::Base
     end
 
     class Firm < Company
@@ -19,15 +19,15 @@ module MyApplication
       belongs_to :firm, foreign_key: "client_of"
       belongs_to :firm_with_other_name, class_name: "Firm", foreign_key: "client_of"
 
-      class Contact < SecondaryActiveRecord::Base; end
+      class Contact < ActiveRecord::Base; end
     end
 
-    class Developer < SecondaryActiveRecord::Base
+    class Developer < ActiveRecord::Base
       has_and_belongs_to_many :projects
       validates_length_of :name, within: (3..20)
     end
 
-    class Project < SecondaryActiveRecord::Base
+    class Project < ActiveRecord::Base
       has_and_belongs_to_many :developers
     end
 
@@ -36,7 +36,7 @@ module MyApplication
         "prefixed_"
       end
 
-      class Company < SecondaryActiveRecord::Base
+      class Company < ActiveRecord::Base
       end
 
       class Firm < Company
@@ -44,7 +44,7 @@ module MyApplication
       end
 
       module Nested
-        class Company < SecondaryActiveRecord::Base
+        class Company < ActiveRecord::Base
         end
       end
     end
@@ -54,7 +54,7 @@ module MyApplication
         "_suffixed"
       end
 
-      class Company < SecondaryActiveRecord::Base
+      class Company < ActiveRecord::Base
       end
 
       class Firm < Company
@@ -62,24 +62,24 @@ module MyApplication
       end
 
       module Nested
-        class Company < SecondaryActiveRecord::Base
+        class Company < ActiveRecord::Base
         end
       end
     end
   end
 
   module Billing
-    class Firm < SecondaryActiveRecord::Base
+    class Firm < ActiveRecord::Base
       self.table_name = "companies"
     end
 
     module Nested
-      class Firm < SecondaryActiveRecord::Base
+      class Firm < ActiveRecord::Base
         self.table_name = "companies"
       end
     end
 
-    class Account < SecondaryActiveRecord::Base
+    class Account < ActiveRecord::Base
       with_options(foreign_key: :firm_id) do |i|
         i.belongs_to :firm, class_name: "MyApplication::Business::Firm"
         i.belongs_to :qualified_billing_firm, class_name: "MyApplication::Billing::Firm"
@@ -91,7 +91,6 @@ module MyApplication
       validate :check_empty_credit_limit
 
       private
-
         def check_empty_credit_limit
           errors.add("credit_card", :blank) if credit_card.blank?
         end

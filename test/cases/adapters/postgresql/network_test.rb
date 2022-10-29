@@ -3,12 +3,12 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlNetworkTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlNetworkTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
-  class PostgresqlNetworkAddress < SecondaryActiveRecord::Base; end
+  class PostgresqlNetworkAddress < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("postgresql_network_addresses", force: true) do |t|
       t.inet "inet_address", default: "192.168.1.1"
       t.cidr "cidr_address", default: "192.168.1.0/24"
@@ -92,5 +92,11 @@ class PostgresqlNetworkTest < SecondaryActiveRecord::PostgreSQLTestCase
     assert_match %r{t\.inet\s+"inet_address",\s+default: "192\.168\.1\.1"}, output
     assert_match %r{t\.cidr\s+"cidr_address",\s+default: "192\.168\.1\.0/24"}, output
     assert_match %r{t\.macaddr\s+"mac_address",\s+default: "ff:ff:ff:ff:ff:ff"}, output
+  end
+
+  def test_mac_address_change_case_does_not_mark_dirty
+    model = PostgresqlNetworkAddress.create(mac_address: "Ab:Cd:Ef:01:02:03")
+    model.mac_address = model.mac_address.swapcase
+    assert_not_predicate model, :changed?
   end
 end

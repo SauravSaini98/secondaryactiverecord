@@ -3,15 +3,15 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlMoneyTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlMoneyTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
-  class PostgresqlMoney < SecondaryActiveRecord::Base
+  class PostgresqlMoney < ActiveRecord::Base
     validates :depth, numericality: true
   end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.execute("set lc_monetary = 'C'")
     @connection.create_table("postgresql_moneys", force: true) do |t|
       t.money "wealth"
@@ -37,7 +37,7 @@ class PostgresqlMoneyTest < SecondaryActiveRecord::PostgreSQLTestCase
   def test_default
     assert_equal BigDecimal("150.55"), PostgresqlMoney.column_defaults["depth"]
     assert_equal BigDecimal("150.55"), PostgresqlMoney.new.depth
-    assert_equal "$150.55", PostgresqlMoney.new.depth_before_type_cast
+    assert_equal "150.55", PostgresqlMoney.new.depth_before_type_cast
   end
 
   def test_money_values
@@ -48,14 +48,40 @@ class PostgresqlMoneyTest < SecondaryActiveRecord::PostgreSQLTestCase
     second_money = PostgresqlMoney.find(2)
     assert_equal 567.89, first_money.wealth
     assert_equal(-567.89, second_money.wealth)
+    assert_equal 567.89, @connection.query_value("SELECT wealth FROM postgresql_moneys WHERE id = 1")
+    assert_equal(-567.89, @connection.query_value("SELECT wealth FROM postgresql_moneys WHERE id = 2"))
   end
 
   def test_money_type_cast
     type = PostgresqlMoney.type_for_attribute("wealth")
-    assert_equal(12345678.12, type.cast("$12,345,678.12".dup))
-    assert_equal(12345678.12, type.cast("$12.345.678,12".dup))
-    assert_equal(-1.15, type.cast("-$1.15".dup))
-    assert_equal(-2.25, type.cast("($2.25)".dup))
+    assert_equal(12345678.12, type.cast(+"$12,345,678.12"))
+    assert_equal(12345678.12, type.cast(+"$12.345.678,12"))
+    assert_equal(12345678.12, type.cast(+"12,345,678.12"))
+    assert_equal(12345678.12, type.cast(+"12.345.678,12"))
+    assert_equal(-1.15, type.cast(+"-$1.15"))
+    assert_equal(-2.25, type.cast(+"($2.25)"))
+    assert_equal(-1.15, type.cast(+"-1.15"))
+    assert_equal(-2.25, type.cast(+"(2.25)"))
+  end
+
+  def test_money_regex_backtracking
+    type = PostgresqlMoney.type_for_attribute("wealth")
+    Timeout.timeout(0.1) do
+      assert_equal(0.0, type.cast("$" + "," * 100000 + ".11!"))
+      assert_equal(0.0, type.cast("$" + "." * 100000 + ",11!"))
+    end
+  end
+
+  def test_sum_with_type_cast
+    @connection.execute("INSERT INTO postgresql_moneys (id, wealth) VALUES (1, '123.45'::money)")
+
+    assert_equal BigDecimal("123.45"), PostgresqlMoney.sum("id * wealth")
+  end
+
+  def test_pluck_with_type_cast
+    @connection.execute("INSERT INTO postgresql_moneys (id, wealth) VALUES (1, '123.45'::money)")
+
+    assert_equal [BigDecimal("123.45")], PostgresqlMoney.pluck(Arel.sql("id * wealth"))
   end
 
   def test_schema_dumping
@@ -65,7 +91,7 @@ class PostgresqlMoneyTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_create_and_update_money
-    money = PostgresqlMoney.create(wealth: "987.65".dup)
+    money = PostgresqlMoney.create(wealth: +"987.65")
     assert_equal 987.65, money.wealth
 
     new_value = BigDecimal("123.45")

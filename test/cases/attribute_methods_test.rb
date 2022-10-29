@@ -12,21 +12,22 @@ require "models/category"
 require "models/reply"
 require "models/contact"
 require "models/keyboard"
+require "models/numeric_data"
 
-class AttributeMethodsTest < SecondaryActiveRecord::TestCase
+class AttributeMethodsTest < ActiveRecord::TestCase
   include InTimeZone
 
   fixtures :topics, :developers, :companies, :computers
 
   def setup
-    @old_matchers = SecondaryActiveRecord::Base.send(:attribute_method_matchers).dup
-    @target = Class.new(SecondaryActiveRecord::Base)
+    @old_matchers = ActiveRecord::Base.send(:attribute_method_matchers).dup
+    @target = Class.new(ActiveRecord::Base)
     @target.table_name = "topics"
   end
 
   teardown do
-    SecondaryActiveRecord::Base.send(:attribute_method_matchers).clear
-    SecondaryActiveRecord::Base.send(:attribute_method_matchers).concat(@old_matchers)
+    ActiveRecord::Base.send(:attribute_method_matchers).clear
+    ActiveRecord::Base.send(:attribute_method_matchers).concat(@old_matchers)
   end
 
   test "attribute_for_inspect with a string" do
@@ -34,19 +35,19 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     t.title = "The First Topic Now Has A Title With\nNewlines And More Than 50 Characters"
 
     assert_equal '"The First Topic Now Has A Title With\nNewlines And ..."', t.attribute_for_inspect(:title)
+    assert_equal '"The First Topic Now Has A Title With\nNewlines And ..."', t.attribute_for_inspect(:heading)
   end
 
   test "attribute_for_inspect with a date" do
     t = topics(:first)
 
-    assert_equal %("#{t.written_on.to_s(:sec_db)}"), t.attribute_for_inspect(:written_on)
+    assert_equal %("#{t.written_on.to_fs(:inspect)}"), t.attribute_for_inspect(:written_on)
   end
 
   test "attribute_for_inspect with an array" do
     t = topics(:first)
-    t.content = [Object.new]
-
-    assert_match %r(\[#<Object:0x[0-9a-f]+>\]), t.attribute_for_inspect(:content)
+    t.content = ["some_value"]
+    assert_match %r(\["some_value"\]), t.attribute_for_inspect(:content)
   end
 
   test "attribute_for_inspect with a long array" do
@@ -56,15 +57,23 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     assert_equal "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]", t.attribute_for_inspect(:content)
   end
 
+  test "attribute_for_inspect with a non-primary key id attribute" do
+    t = topics(:first).becomes(TitlePrimaryKeyTopic)
+    t.title = "The First Topic Now Has A Title With\nNewlines And More Than 50 Characters"
+
+    assert_equal "1", t.attribute_for_inspect(:id)
+  end
+
   test "attribute_present" do
     t = Topic.new
     t.title = "hello there!"
     t.written_on = Time.now
     t.author_name = ""
     assert t.attribute_present?("title")
+    assert t.attribute_present?("heading")
     assert t.attribute_present?("written_on")
-    assert !t.attribute_present?("content")
-    assert !t.attribute_present?("author_name")
+    assert_not t.attribute_present?("content")
+    assert_not t.attribute_present?("author_name")
   end
 
   test "attribute_present with booleans" do
@@ -77,7 +86,7 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     assert b2.attribute_present?(:value)
 
     b3 = Boolean.new
-    assert !b3.attribute_present?(:value)
+    assert_not b3.attribute_present?(:value)
 
     b4 = Boolean.new
     b4.value = false
@@ -163,19 +172,6 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     assert_equal "10", keyboard.read_attribute_before_type_cast(:key_number)
   end
 
-  # Syck calls respond_to? before actually calling initialize.
-  test "respond_to? with an allocated object" do
-    klass = Class.new(SecondaryActiveRecord::Base) do
-      self.table_name = "topics"
-    end
-
-    topic = klass.allocate
-    assert_not_respond_to topic, "nothingness"
-    assert_not_respond_to topic, :nothingness
-    assert_respond_to topic, "title"
-    assert_respond_to topic, :title
-  end
-
   # IRB inspects the return value of MyModel.allocate.
   test "allocated objects can be inspected" do
     topic = Topic.allocate
@@ -217,6 +213,17 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
       assert_equal Time.zone.parse("2009-10-11 12:13:14"), record.written_on
       assert_equal ActiveSupport::TimeZone["Pacific Time (US & Canada)"], record.written_on.time_zone
     end
+  end
+
+  test "read attributes_for_database" do
+    topic = Topic.new
+    topic.content = { "one" => 1, "two" => 2 }
+
+    db_attributes = Topic.instantiate(topic.attributes_for_database).attributes
+    before_type_cast_attributes = Topic.instantiate(topic.attributes_before_type_cast).attributes
+
+    assert_equal topic.attributes, db_attributes
+    assert_not_equal topic.attributes, before_type_cast_attributes
   end
 
   test "read attributes_after_type_cast on a date" do
@@ -269,14 +276,12 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   end
 
   test "case-sensitive attributes hash" do
-    # DB2 is not case-sensitive.
-    return true if current_adapter?(:DB2Adapter)
-
-    assert_equal @loaded_fixtures["computers"]["workstation"].to_hash, Computer.first.attributes
+    expected = ["created_at", "developer", "extendedWarranty", "id", "system", "timezone", "updated_at"]
+    assert_equal expected, Computer.first.attributes.keys.sort
   end
 
   test "attributes without primary key" do
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "developers_projects"
     end
 
@@ -285,14 +290,16 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   end
 
   test "hashes are not mangled" do
-    new_topic = { title: "New Topic" }
-    new_topic_values = { title: "AnotherTopic" }
+    new_topic = { "title" => "New Topic", "content" => { "key" => "First value" } }
+    new_topic_values = { "title" => "AnotherTopic", "content" => { "key" => "Second value" } }
 
     topic = Topic.new(new_topic)
-    assert_equal new_topic[:title], topic.title
+    assert_equal new_topic["title"], topic.title
+    assert_equal new_topic["content"], topic.content
 
     topic.attributes = new_topic_values
-    assert_equal new_topic_values[:title], topic.title
+    assert_equal new_topic_values["title"], topic.title
+    assert_equal new_topic_values["content"], topic.content
   end
 
   test "create through factory" do
@@ -303,13 +310,13 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
 
   test "write_attribute" do
     topic = Topic.new
-    topic.send(:write_attribute, :title, "Still another topic")
+    topic.write_attribute :title, "Still another topic"
     assert_equal "Still another topic", topic.title
 
     topic[:title] = "Still another topic: part 2"
     assert_equal "Still another topic: part 2", topic.title
 
-    topic.send(:write_attribute, "title", "Still another topic: part 3")
+    topic.write_attribute "title", "Still another topic: part 3"
     assert_equal "Still another topic: part 3", topic.title
 
     topic["title"] = "Still another topic: part 4"
@@ -321,6 +328,18 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     topic.write_attribute :heading, "New topic"
 
     assert_equal "New topic", topic.title
+  end
+
+  test "write_attribute raises ActiveModel::MissingAttributeError when the attribute does not exist" do
+    topic = Topic.first
+    assert_raises(ActiveModel::MissingAttributeError) { topic.update_columns(no_column_exists: "Hello!") }
+    assert_raises(ActiveModel::UnknownAttributeError) { topic.update(no_column_exists: "Hello!") }
+  end
+
+  test "write_attribute allows writing to aliased attributes" do
+    topic = Topic.first
+    assert_nothing_raised { topic.update_columns(heading: "Hello!") }
+    assert_nothing_raised { topic.update(heading: "Hello!") }
   end
 
   test "read_attribute" do
@@ -354,9 +373,9 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   test "read_attribute when false" do
     topic = topics(:first)
     topic.approved = false
-    assert !topic.approved?, "approved should be false"
+    assert_not topic.approved?, "approved should be false"
     topic.approved = "false"
-    assert !topic.approved?, "approved should be false"
+    assert_not topic.approved?, "approved should be false"
   end
 
   test "read_attribute when true" do
@@ -370,10 +389,10 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   test "boolean attributes writing and reading" do
     topic = Topic.new
     topic.approved = "false"
-    assert !topic.approved?, "approved should be false"
+    assert_not topic.approved?, "approved should be false"
 
     topic.approved = "false"
-    assert !topic.approved?, "approved should be false"
+    assert_not topic.approved?, "approved should be false"
 
     topic.approved = "true"
     assert topic.approved?, "approved should be true"
@@ -388,13 +407,13 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
       super(attr_name, value.downcase)
     end
 
-    topic.send(:write_attribute, :title, "Yet another topic")
+    topic.write_attribute :title, "Yet another topic"
     assert_equal "yet another topic", topic.title
 
     topic[:title] = "Yet another topic: part 2"
     assert_equal "yet another topic: part 2", topic.title
 
-    topic.send(:write_attribute, "title", "Yet another topic: part 3")
+    topic.write_attribute "title", "Yet another topic: part 3"
     assert_equal "yet another topic: part 3", topic.title
 
     topic["title"] = "Yet another topic: part 4"
@@ -421,12 +440,26 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     assert_equal "a", topic[:title]
   end
 
+  test "read overridden attribute with predicate respects override" do
+    topic = Topic.new
+
+    topic.approved = true
+
+    def topic.approved; false; end
+
+    assert_not topic.approved?, "overridden approved should be false"
+  end
+
   test "string attribute predicate" do
     [nil, "", " "].each do |value|
       assert_equal false, Topic.new(author_name: value).author_name?
     end
 
     assert_equal true, Topic.new(author_name: "Name").author_name?
+
+    ActiveModel::Type::Boolean::FALSE_VALUES.each do |value|
+      assert_predicate Topic.new(author_name: value), :author_name?
+    end
   end
 
   test "number attribute predicate" do
@@ -448,8 +481,71 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     end
   end
 
+  test "user-defined text attribute predicate" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = Topic.table_name
+
+      attribute :user_defined_text, :text
+    end
+
+    topic = klass.new(user_defined_text: "text")
+    assert_predicate topic, :user_defined_text?
+
+    ActiveModel::Type::Boolean::FALSE_VALUES.each do |value|
+      topic = klass.new(user_defined_text: value)
+      assert_predicate topic, :user_defined_text?
+    end
+  end
+
+  test "user-defined date attribute predicate" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = Topic.table_name
+
+      attribute :user_defined_date, :date
+    end
+
+    topic = klass.new(user_defined_date: Date.current)
+    assert_predicate topic, :user_defined_date?
+  end
+
+  test "user-defined datetime attribute predicate" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = Topic.table_name
+
+      attribute :user_defined_datetime, :datetime
+    end
+
+    topic = klass.new(user_defined_datetime: Time.current)
+    assert_predicate topic, :user_defined_datetime?
+  end
+
+  test "user-defined time attribute predicate" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = Topic.table_name
+
+      attribute :user_defined_time, :time
+    end
+
+    topic = klass.new(user_defined_time: Time.current)
+    assert_predicate topic, :user_defined_time?
+  end
+
+  test "user-defined json attribute predicate" do
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = Topic.table_name
+
+      attribute :user_defined_json, :json
+    end
+
+    topic = klass.new(user_defined_json: { key: "value" })
+    assert_predicate topic, :user_defined_json?
+
+    topic = klass.new(user_defined_json: {})
+    assert_not_predicate topic, :user_defined_json?
+  end
+
   test "custom field attribute predicate" do
-    object = Company.find_by_sql(<<-SQL).first
+    object = Company.find_by_sql(<<~SQL).first
       SELECT c1.*, c2.type as string_value, c2.rating as int_value
         FROM companies c1, companies c2
        WHERE c1.firm_id = c2.id
@@ -492,9 +588,9 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
 
       meth = "#{prefix}title"
       assert_respond_to topic, meth
-      assert_equal ["title"], topic.send(meth)
-      assert_equal ["title", "a"], topic.send(meth, "a")
-      assert_equal ["title", 1, 2, 3], topic.send(meth, 1, 2, 3)
+      assert_equal ["title"], topic.public_send(meth)
+      assert_equal ["title", "a"], topic.public_send(meth, "a")
+      assert_equal ["title", 1, 2, 3], topic.public_send(meth, 1, 2, 3)
     end
   end
 
@@ -506,9 +602,9 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
 
       meth = "title#{suffix}"
       assert_respond_to topic, meth
-      assert_equal ["title"], topic.send(meth)
-      assert_equal ["title", "a"], topic.send(meth, "a")
-      assert_equal ["title", 1, 2, 3], topic.send(meth, 1, 2, 3)
+      assert_equal ["title"], topic.public_send(meth)
+      assert_equal ["title", "a"], topic.public_send(meth, "a")
+      assert_equal ["title", 1, 2, 3], topic.public_send(meth, 1, 2, 3)
     end
   end
 
@@ -520,14 +616,14 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
 
       meth = "#{prefix}title#{suffix}"
       assert_respond_to topic, meth
-      assert_equal ["title"], topic.send(meth)
-      assert_equal ["title", "a"], topic.send(meth, "a")
-      assert_equal ["title", 1, 2, 3], topic.send(meth, 1, 2, 3)
+      assert_equal ["title"], topic.public_send(meth)
+      assert_equal ["title", "a"], topic.public_send(meth, "a")
+      assert_equal ["title", 1, 2, 3], topic.public_send(meth, 1, 2, 3)
     end
   end
 
   test "should unserialize attributes for frozen records" do
-    myobj = { value1: :value2 }
+    myobj = { "value1" => "value2" }
     topic = Topic.create(content: myobj)
     topic.freeze
     assert_equal myobj, topic.content
@@ -536,7 +632,7 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   test "typecast attribute from select to false" do
     Topic.create(title: "Budget")
     # Oracle does not support boolean expressions in SELECT.
-    if current_adapter?(:OracleAdapter, :FbAdapter)
+    if current_adapter?(:OracleAdapter)
       topic = Topic.all.merge!(select: "topics.*, 0 as is_test").first
     else
       topic = Topic.all.merge!(select: "topics.*, 1=2 as is_test").first
@@ -547,7 +643,7 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   test "typecast attribute from select to true" do
     Topic.create(title: "Budget")
     # Oracle does not support boolean expressions in SELECT.
-    if current_adapter?(:OracleAdapter, :FbAdapter)
+    if current_adapter?(:OracleAdapter)
       topic = Topic.all.merge!(select: "topics.*, 1 as is_test").first
     else
       topic = Topic.all.merge!(select: "topics.*, 2=2 as is_test").first
@@ -555,11 +651,11 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     assert_predicate topic, :is_test?
   end
 
-  test "raises SecondaryActiveRecord::DangerousAttributeError when defining an AR method in a model" do
+  test "raises ActiveRecord::DangerousAttributeError when defining an AR method in a model" do
     %w(save create_or_update).each do |method|
-      klass = Class.new(SecondaryActiveRecord::Base)
+      klass = Class.new(ActiveRecord::Base)
       klass.class_eval "def #{method}() 'defined #{method}' end"
-      assert_raise SecondaryActiveRecord::DangerousAttributeError do
+      assert_raise ActiveRecord::DangerousAttributeError do
         klass.instance_method_already_implemented?(method)
       end
     end
@@ -703,8 +799,13 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     in_time_zone "Pacific Time (US & Canada)" do
       record = Topic.new(id: 1)
       record.written_on = "Jan 01 00:00:00 2014"
-      assert_equal record, YAML.load(YAML.dump(record))
+      payload = YAML.dump(record)
+      assert_equal record, YAML.respond_to?(:unsafe_load) ? YAML.unsafe_load(payload) : YAML.load(payload)
     end
+  ensure
+    # NOTE: Reset column info because global topics
+    # don't have tz-aware attributes by default.
+    Topic.reset_column_information
   end
 
   test "setting a time zone-aware time in the current time zone" do
@@ -806,17 +907,17 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   test "bulk updates respect access control" do
     privatize("title=(value)")
 
-    assert_raise(SecondaryActiveRecord::UnknownAttributeError) { @target.new(title: "Rants about pants") }
-    assert_raise(SecondaryActiveRecord::UnknownAttributeError) { @target.new.attributes = { title: "Ants in pants" } }
+    assert_raise(ActiveRecord::UnknownAttributeError) { @target.new(title: "Rants about pants") }
+    assert_raise(ActiveRecord::UnknownAttributeError) { @target.new.attributes = { title: "Ants in pants" } }
   end
 
-  test "bulk update raises SecondaryActiveRecord::UnknownAttributeError" do
-    error = assert_raises(SecondaryActiveRecord::UnknownAttributeError) {
+  test "bulk update raises ActiveRecord::UnknownAttributeError" do
+    error = assert_raises(ActiveRecord::UnknownAttributeError) {
       Topic.new(hello: "world")
     }
     assert_instance_of Topic, error.record
     assert_equal "hello", error.attribute
-    assert_equal "unknown attribute 'hello' for Topic.", error.message
+    assert_match "unknown attribute 'hello' for Topic.", error.message
   end
 
   test "method overrides in multi-level subclasses" do
@@ -833,17 +934,17 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   end
 
   test "global methods are overwritten" do
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "computers"
     end
 
-    assert !klass.instance_method_already_implemented?(:system)
+    assert_not klass.instance_method_already_implemented?(:system)
     computer = klass.new
     assert_nil computer.system
   end
 
   test "global methods are overwritten when subclassing" do
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.abstract_class = true
     end
 
@@ -851,8 +952,8 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
       self.table_name = "computers"
     end
 
-    assert !klass.instance_method_already_implemented?(:system)
-    assert !subklass.instance_method_already_implemented?(:system)
+    assert_not klass.instance_method_already_implemented?(:system)
+    assert_not subklass.instance_method_already_implemented?(:system)
     computer = subklass.new
     assert_nil computer.system
   end
@@ -874,7 +975,8 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   end
 
   test "define_attribute_method works with both symbol and string" do
-    klass = Class.new(SecondaryActiveRecord::Base)
+    klass = Class.new(ActiveRecord::Base)
+    klass.table_name = "foo"
 
     assert_nothing_raised { klass.define_attribute_method(:foo) }
     assert_nothing_raised { klass.define_attribute_method("bar") }
@@ -904,7 +1006,7 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
   end
 
   test "inherited custom accessors with reserved names" do
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "computers"
       self.abstract_class = true
       def system; "omg"; end
@@ -982,7 +1084,7 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     model = @target.select("id").last!
 
     assert_equal ["id"], model.attribute_names
-    # Sanity check, make sure other columns exist.
+    # Ensure other columns exist.
     assert_not_equal ["id"], @target.column_names
   end
 
@@ -1004,15 +1106,19 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     assert_equal ["title"], model.accessed_fields
   end
 
-  test "generated attribute methods ancestors have correct class" do
+  test "generated attribute methods ancestors have correct module" do
     mod = Topic.send(:generated_attribute_methods)
-    assert_match %r(GeneratedAttributeMethods), mod.inspect
+    assert_equal "Topic::GeneratedAttributeMethods", mod.inspect
+  end
+
+  test "read_attribute_before_type_cast with aliased attribute" do
+    model = NumericData.new(new_bank_balance: "abcd")
+    assert_equal "abcd", model.read_attribute_before_type_cast("new_bank_balance")
   end
 
   private
-
     def new_topic_like_ar_class(&block)
-      klass = Class.new(SecondaryActiveRecord::Base) do
+      klass = Class.new(ActiveRecord::Base) do
         self.table_name = "topics"
         class_eval(&block)
       end
@@ -1022,11 +1128,11 @@ class AttributeMethodsTest < SecondaryActiveRecord::TestCase
     end
 
     def with_time_zone_aware_types(*types)
-      old_types = SecondaryActiveRecord::Base.time_zone_aware_types
-      SecondaryActiveRecord::Base.time_zone_aware_types = types
+      old_types = ActiveRecord::Base.time_zone_aware_types
+      ActiveRecord::Base.time_zone_aware_types = types
       yield
     ensure
-      SecondaryActiveRecord::Base.time_zone_aware_types = old_types
+      ActiveRecord::Base.time_zone_aware_types = old_types
     end
 
     def privatize(method_signature)

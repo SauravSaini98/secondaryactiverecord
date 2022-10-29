@@ -2,8 +2,8 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
-  class StringTypeTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class StringTypeTest < ActiveRecord::TestCase
     test "string mutations are detected" do
       klass = Class.new(Base)
       klass.table_name = "authors"

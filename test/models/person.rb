@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Person < SecondaryActiveRecord::Base
+class Person < ActiveRecord::Base
   has_many :readers
   has_many :secure_readers
   has_one  :reader
@@ -17,8 +17,8 @@ class Person < SecondaryActiveRecord::Base
 
   has_many :references
   has_many :bad_references
-  has_many :fixed_bad_references, -> { where favourite: true }, class_name: "BadReference"
-  has_one  :favourite_reference, -> { where "favourite=?", true }, class_name: "Reference"
+  has_many :fixed_bad_references, -> { where favorite: true }, class_name: "BadReference"
+  has_one  :favorite_reference, -> { where "favorite=?", true }, class_name: "Reference"
   has_many :posts_with_comments_sorted_by_comment_id, -> { includes(:comments).order("comments.id") }, through: :readers, source: :post
   has_many :first_posts, -> { where(id: [1, 2]) }, through: :readers
 
@@ -41,28 +41,33 @@ class Person < SecondaryActiveRecord::Base
   scope :males,   -> { where(gender: "M") }
 end
 
-class PersonWithDependentDestroyJobs < SecondaryActiveRecord::Base
+class PersonWithDependentDestroyJobs < ActiveRecord::Base
   self.table_name = "people"
 
   has_many :references, foreign_key: :person_id
   has_many :jobs, source: :job, through: :references, dependent: :destroy
 end
 
-class PersonWithDependentDeleteAllJobs < SecondaryActiveRecord::Base
+class PersonWithDependentDeleteAllJobs < ActiveRecord::Base
   self.table_name = "people"
 
   has_many :references, foreign_key: :person_id
   has_many :jobs, source: :job, through: :references, dependent: :delete_all
 end
 
-class PersonWithDependentNullifyJobs < SecondaryActiveRecord::Base
+class PersonWithDependentNullifyJobs < ActiveRecord::Base
   self.table_name = "people"
 
   has_many :references, foreign_key: :person_id
   has_many :jobs, source: :job, through: :references, dependent: :nullify
 end
 
-class LoosePerson < SecondaryActiveRecord::Base
+class PersonWithPolymorphicDependentNullifyComments < ActiveRecord::Base
+  self.table_name = "people"
+  has_many :comments, as: :author, dependent: :nullify
+end
+
+class LoosePerson < ActiveRecord::Base
   self.table_name = "people"
   self.abstract_class = true
 
@@ -75,7 +80,7 @@ end
 
 class LooseDescendant < LoosePerson; end
 
-class TightPerson < SecondaryActiveRecord::Base
+class TightPerson < ActiveRecord::Base
   self.table_name = "people"
 
   has_one    :best_friend,    class_name: "TightPerson", foreign_key: :best_friend_id
@@ -87,7 +92,7 @@ end
 
 class TightDescendant < TightPerson; end
 
-class RichPerson < SecondaryActiveRecord::Base
+class RichPerson < ActiveRecord::Base
   self.table_name = "people"
 
   has_and_belongs_to_many :treasures, join_table: "peoples_treasures"
@@ -96,7 +101,6 @@ class RichPerson < SecondaryActiveRecord::Base
   before_validation :run_before_validation
 
   private
-
     def run_before_create
       self.first_name = first_name.to_s + "run_before_create"
     end
@@ -106,7 +110,7 @@ class RichPerson < SecondaryActiveRecord::Base
     end
 end
 
-class NestedPerson < SecondaryActiveRecord::Base
+class NestedPerson < ActiveRecord::Base
   self.table_name = "people"
 
   has_one :best_friend, class_name: "NestedPerson", foreign_key: :best_friend_id
@@ -136,7 +140,7 @@ class Insure
   end
 end
 
-class SerializedPerson < SecondaryActiveRecord::Base
+class SerializedPerson < ActiveRecord::Base
   self.table_name = "people"
 
   serialize :insures, Insure

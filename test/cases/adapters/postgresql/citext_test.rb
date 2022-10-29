@@ -3,14 +3,14 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlCitextTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlCitextTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
-  class Citext < SecondaryActiveRecord::Base
+  class Citext < ActiveRecord::Base
     self.table_name = "citexts"
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
 
     enable_extension!("citext", @connection)
 
@@ -47,7 +47,7 @@ class PostgresqlCitextTest < SecondaryActiveRecord::PostgreSQLTestCase
       column = Citext.columns_hash["username"]
       assert_equal :citext, column.type
 
-      raise SecondaryActiveRecord::Rollback # reset the schema change
+      raise ActiveRecord::Rollback # reset the schema change
     end
   ensure
     Citext.reset_column_information

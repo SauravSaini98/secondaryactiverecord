@@ -12,16 +12,16 @@ module ViewBehavior
     fixtures :books
   end
 
-  class Ebook < SecondaryActiveRecord::Base
+  class Ebook < ActiveRecord::Base
     self.table_name = "ebooks'"
     self.primary_key = "id"
   end
 
   def setup
     super
-    @connection = SecondaryActiveRecord::Base.connection
-    create_view "ebooks'", <<-SQL
-      SELECT id, name, status FROM books WHERE format = 'ebook'
+    @connection = ActiveRecord::Base.connection
+    create_view "ebooks'", <<~SQL
+      SELECT id, name, cover, status FROM books WHERE format = 'ebook'
     SQL
   end
 
@@ -58,16 +58,17 @@ module ViewBehavior
   def test_column_definitions
     assert_equal([["id", :integer],
                   ["name", :string],
+                  ["cover", :string],
                   ["status", :integer]], Ebook.columns.map { |c| [c.name, c.type] })
   end
 
   def test_attributes
-    assert_equal({ "id" => 2, "name" => "Ruby for Rails", "status" => 0 },
+    assert_equal({ "id" => 2, "name" => "Ruby for Rails", "cover" => "hard", "status" => 0 },
                  Ebook.first.attributes)
   end
 
   def test_does_not_assume_id_column_as_primary_key
-    model = Class.new(SecondaryActiveRecord::Base) do
+    model = Class.new(ActiveRecord::Base) do
       self.table_name = "ebooks'"
     end
     assert_nil model.primary_key
@@ -84,8 +85,8 @@ module ViewBehavior
     end
 end
 
-if SecondaryActiveRecord::Base.connection.supports_views?
-  class ViewWithPrimaryKeyTest < SecondaryActiveRecord::TestCase
+if ActiveRecord::Base.connection.supports_views?
+  class ViewWithPrimaryKeyTest < ActiveRecord::TestCase
     include ViewBehavior
 
     private
@@ -98,15 +99,15 @@ if SecondaryActiveRecord::Base.connection.supports_views?
       end
   end
 
-  class ViewWithoutPrimaryKeyTest < SecondaryActiveRecord::TestCase
+  class ViewWithoutPrimaryKeyTest < ActiveRecord::TestCase
     include SchemaDumpingHelper
     fixtures :books
 
-    class Paperback < SecondaryActiveRecord::Base; end
+    class Paperback < ActiveRecord::Base; end
 
     setup do
-      @connection = SecondaryActiveRecord::Base.connection
-      @connection.execute <<-SQL
+      @connection = ActiveRecord::Base.connection
+      @connection.execute <<~SQL
         CREATE VIEW paperbacks
           AS SELECT name, status FROM books WHERE format = 'paperback'
       SQL
@@ -156,20 +157,19 @@ if SecondaryActiveRecord::Base.connection.supports_views?
   end
 
   # sqlite dose not support CREATE, INSERT, and DELETE for VIEW
-  if current_adapter?(:Mysql2Adapter, :SQLServerAdapter) ||
-      current_adapter?(:PostgreSQLAdapter) && SecondaryActiveRecord::Base.connection.postgresql_version >= 90300
+  if current_adapter?(:Mysql2Adapter, :SQLServerAdapter, :PostgreSQLAdapter)
 
-    class UpdateableViewTest < SecondaryActiveRecord::TestCase
+    class UpdateableViewTest < ActiveRecord::TestCase
       self.use_transactional_tests = false
       fixtures :books
 
-      class PrintedBook < SecondaryActiveRecord::Base
+      class PrintedBook < ActiveRecord::Base
         self.primary_key = "id"
       end
 
       setup do
-        @connection = SecondaryActiveRecord::Base.connection
-        @connection.execute <<-SQL
+        @connection = ActiveRecord::Base.connection
+        @connection.execute <<~SQL
           CREATE VIEW printed_books
             AS SELECT id, name, status, format FROM books WHERE format = 'paperback'
         SQL
@@ -199,17 +199,16 @@ if SecondaryActiveRecord::Base.connection.supports_views?
         book.format = "ebook"
         book.save!
 
-        assert_raises SecondaryActiveRecord::RecordNotFound do
+        assert_raises ActiveRecord::RecordNotFound do
           book.reload
         end
       end
     end
   end # end of `if current_adapter?(:Mysql2Adapter, :PostgreSQLAdapter, :SQLServerAdapter)`
-end # end of `if SecondaryActiveRecord::Base.connection.supports_views?`
+end # end of `if ActiveRecord::Base.connection.supports_views?`
 
-if SecondaryActiveRecord::Base.connection.respond_to?(:supports_materialized_views?) &&
-    SecondaryActiveRecord::Base.connection.supports_materialized_views?
-  class MaterializedViewTest < SecondaryActiveRecord::PostgreSQLTestCase
+if ActiveRecord::Base.connection.supports_materialized_views?
+  class MaterializedViewTest < ActiveRecord::PostgreSQLTestCase
     include ViewBehavior
 
     private

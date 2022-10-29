@@ -2,33 +2,33 @@
 
 require "cases/helper"
 
-class ReservedWordTest < SecondaryActiveRecord::TestCase
+class ReservedWordTest < ActiveRecord::TestCase
   self.use_instantiated_fixtures = true
   self.use_transactional_tests = false
 
-  class Group < SecondaryActiveRecord::Base
+  class Group < ActiveRecord::Base
     Group.table_name = "group"
     belongs_to :select
     has_one :values
   end
 
-  class Select < SecondaryActiveRecord::Base
+  class Select < ActiveRecord::Base
     Select.table_name = "select"
     has_many :groups
   end
 
-  class Values < SecondaryActiveRecord::Base
+  class Values < ActiveRecord::Base
     Values.table_name = "values"
   end
 
-  class Distinct < SecondaryActiveRecord::Base
+  class Distinct < ActiveRecord::Base
     Distinct.table_name = "distinct"
     has_and_belongs_to_many :selects
     has_many :values, through: :groups
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table :select, force: true
     @connection.create_table :distinct, force: true
     @connection.create_table :distinct_select, id: false, force: true do |t|
@@ -91,7 +91,7 @@ class ReservedWordTest < SecondaryActiveRecord::TestCase
   def test_delete_all_with_subselect
     create_test_fixtures :values
     assert_equal 1, Values.order(:as).limit(1).offset(1).delete_all
-    assert_raise(SecondaryActiveRecord::RecordNotFound) { Values.find(2) }
+    assert_raise(ActiveRecord::RecordNotFound) { Values.find(2) }
     assert Values.find(1)
   end
 
@@ -136,6 +136,6 @@ class ReservedWordTest < SecondaryActiveRecord::TestCase
   private
     # custom fixture loader, uses FixtureSet#create_fixtures and appends base_path to the current file's path
     def create_test_fixtures(*fixture_names)
-      SecondaryActiveRecord::FixtureSet.create_fixtures(FIXTURES_ROOT + "/reserved_words", fixture_names)
+      ActiveRecord::FixtureSet.create_fixtures(FIXTURES_ROOT + "/reserved_words", fixture_names)
     end
 end

@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-class DatabaseStatementsTest < SecondaryActiveRecord::TestCase
+class DatabaseStatementsTest < ActiveRecord::TestCase
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   unless current_adapter?(:OracleAdapter)
@@ -23,7 +23,6 @@ class DatabaseStatementsTest < SecondaryActiveRecord::TestCase
   end
 
   private
-
     def return_the_inserted_id(method:)
       # Oracle adapter uses prefetched primary key values from sequence and passes them to connection adapter insert method
       if current_adapter?(:OracleAdapter)

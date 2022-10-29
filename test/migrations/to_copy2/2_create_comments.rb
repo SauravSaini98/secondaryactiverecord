@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class CreateComments < SecondaryActiveRecord::Migration::Current
+class CreateComments < ActiveRecord::Migration::Current
   def self.up
   end
 

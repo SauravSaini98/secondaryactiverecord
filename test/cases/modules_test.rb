@@ -6,7 +6,7 @@ require "models/shop"
 require "models/developer"
 require "models/computer"
 
-class ModulesTest < SecondaryActiveRecord::TestCase
+class ModulesTest < ActiveRecord::TestCase
   fixtures :accounts, :companies, :projects, :developers, :collections, :products, :variants
 
   def setup
@@ -18,21 +18,21 @@ class ModulesTest < SecondaryActiveRecord::TestCase
       @undefined_consts.merge! const => Object.send(:remove_const, const) if Object.const_defined?(const)
     end
 
-    SecondaryActiveRecord::Base.store_full_sti_class = false
+    ActiveRecord::Base.store_full_sti_class = false
   end
 
   teardown do
     # reinstate the constants that we undefined in the setup
     @undefined_consts.each do |constant, value|
-      Object.send :const_set, constant, value unless value.nil?
+      Object.const_set constant, value unless value.nil?
     end
 
-    SecondaryActiveRecord::Base.store_full_sti_class = true
+    ActiveRecord::Base.store_full_sti_class = true
   end
 
   def test_module_spanning_associations
     firm = MyApplication::Business::Firm.first
-    assert !firm.clients.empty?, "Firm should have clients"
+    assert_not firm.clients.empty?, "Firm should have clients"
     assert_nil firm.class.table_name.match("::"), "Firm shouldn't have the module appear in its table name"
   end
 
@@ -57,9 +57,9 @@ class ModulesTest < SecondaryActiveRecord::TestCase
   end
 
   def test_table_name
-    assert_equal "accounts", MyApplication::Billing::Account.table_name, "table_name for SecondaryActiveRecord model in module"
-    assert_equal "companies", MyApplication::Business::Client.table_name, "table_name for SecondaryActiveRecord model subclass"
-    assert_equal "company_contacts", MyApplication::Business::Client::Contact.table_name, "table_name for SecondaryActiveRecord model enclosed by another SecondaryActiveRecord model"
+    assert_equal "accounts", MyApplication::Billing::Account.table_name, "table_name for ActiveRecord model in module"
+    assert_equal "companies", MyApplication::Business::Client.table_name, "table_name for ActiveRecord model subclass"
+    assert_equal "company_contacts", MyApplication::Business::Client::Contact.table_name, "table_name for ActiveRecord model enclosed by another ActiveRecord model"
   end
 
   def test_assign_ids
@@ -87,9 +87,9 @@ class ModulesTest < SecondaryActiveRecord::TestCase
   end
 
   def test_module_table_name_prefix
-    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Company.table_name, "inferred table_name for SecondaryActiveRecord model in module with table_name_prefix"
-    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Nested::Company.table_name, "table_name for SecondaryActiveRecord model in nested module with a parent table_name_prefix"
-    assert_equal "companies", MyApplication::Business::Prefixed::Firm.table_name, "explicit table_name for SecondaryActiveRecord model in module with table_name_prefix should not be prefixed"
+    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Company.table_name, "inferred table_name for ActiveRecord model in module with table_name_prefix"
+    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Nested::Company.table_name, "table_name for ActiveRecord model in nested module with a parent table_name_prefix"
+    assert_equal "companies", MyApplication::Business::Prefixed::Firm.table_name, "explicit table_name for ActiveRecord model in module with table_name_prefix should not be prefixed"
   end
 
   def test_module_table_name_prefix_with_global_prefix
@@ -103,21 +103,21 @@ class ModulesTest < SecondaryActiveRecord::TestCase
                 MyApplication::Business::Prefixed::Nested::Company,
                 MyApplication::Billing::Account ]
 
-    SecondaryActiveRecord::Base.table_name_prefix = "global_"
+    ActiveRecord::Base.table_name_prefix = "global_"
     classes.each(&:reset_table_name)
-    assert_equal "global_companies", MyApplication::Business::Company.table_name, "inferred table_name for SecondaryActiveRecord model in module without table_name_prefix"
-    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Company.table_name, "inferred table_name for SecondaryActiveRecord model in module with table_name_prefix"
-    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Nested::Company.table_name, "table_name for SecondaryActiveRecord model in nested module with a parent table_name_prefix"
-    assert_equal "companies", MyApplication::Business::Prefixed::Firm.table_name, "explicit table_name for SecondaryActiveRecord model in module with table_name_prefix should not be prefixed"
+    assert_equal "global_companies", MyApplication::Business::Company.table_name, "inferred table_name for ActiveRecord model in module without table_name_prefix"
+    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Company.table_name, "inferred table_name for ActiveRecord model in module with table_name_prefix"
+    assert_equal "prefixed_companies", MyApplication::Business::Prefixed::Nested::Company.table_name, "table_name for ActiveRecord model in nested module with a parent table_name_prefix"
+    assert_equal "companies", MyApplication::Business::Prefixed::Firm.table_name, "explicit table_name for ActiveRecord model in module with table_name_prefix should not be prefixed"
   ensure
-    SecondaryActiveRecord::Base.table_name_prefix = ""
+    ActiveRecord::Base.table_name_prefix = ""
     classes.each(&:reset_table_name)
   end
 
   def test_module_table_name_suffix
-    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Company.table_name, "inferred table_name for SecondaryActiveRecord model in module with table_name_suffix"
-    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Nested::Company.table_name, "table_name for SecondaryActiveRecord model in nested module with a parent table_name_suffix"
-    assert_equal "companies", MyApplication::Business::Suffixed::Firm.table_name, "explicit table_name for SecondaryActiveRecord model in module with table_name_suffix should not be suffixed"
+    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Company.table_name, "inferred table_name for ActiveRecord model in module with table_name_suffix"
+    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Nested::Company.table_name, "table_name for ActiveRecord model in nested module with a parent table_name_suffix"
+    assert_equal "companies", MyApplication::Business::Suffixed::Firm.table_name, "explicit table_name for ActiveRecord model in module with table_name_suffix should not be suffixed"
   end
 
   def test_module_table_name_suffix_with_global_suffix
@@ -131,44 +131,44 @@ class ModulesTest < SecondaryActiveRecord::TestCase
                 MyApplication::Business::Suffixed::Nested::Company,
                 MyApplication::Billing::Account ]
 
-    SecondaryActiveRecord::Base.table_name_suffix = "_global"
+    ActiveRecord::Base.table_name_suffix = "_global"
     classes.each(&:reset_table_name)
-    assert_equal "companies_global", MyApplication::Business::Company.table_name, "inferred table_name for SecondaryActiveRecord model in module without table_name_suffix"
-    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Company.table_name, "inferred table_name for SecondaryActiveRecord model in module with table_name_suffix"
-    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Nested::Company.table_name, "table_name for SecondaryActiveRecord model in nested module with a parent table_name_suffix"
-    assert_equal "companies", MyApplication::Business::Suffixed::Firm.table_name, "explicit table_name for SecondaryActiveRecord model in module with table_name_suffix should not be suffixed"
+    assert_equal "companies_global", MyApplication::Business::Company.table_name, "inferred table_name for ActiveRecord model in module without table_name_suffix"
+    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Company.table_name, "inferred table_name for ActiveRecord model in module with table_name_suffix"
+    assert_equal "companies_suffixed", MyApplication::Business::Suffixed::Nested::Company.table_name, "table_name for ActiveRecord model in nested module with a parent table_name_suffix"
+    assert_equal "companies", MyApplication::Business::Suffixed::Firm.table_name, "explicit table_name for ActiveRecord model in module with table_name_suffix should not be suffixed"
   ensure
-    SecondaryActiveRecord::Base.table_name_suffix = ""
+    ActiveRecord::Base.table_name_suffix = ""
     classes.each(&:reset_table_name)
   end
 
   def test_compute_type_can_infer_class_name_of_sibling_inside_module
-    old = SecondaryActiveRecord::Base.store_full_sti_class
-    SecondaryActiveRecord::Base.store_full_sti_class = true
+    old = ActiveRecord::Base.store_full_sti_class
+    ActiveRecord::Base.store_full_sti_class = true
     assert_equal MyApplication::Business::Firm, MyApplication::Business::Client.send(:compute_type, "Firm")
   ensure
-    SecondaryActiveRecord::Base.store_full_sti_class = old
+    ActiveRecord::Base.store_full_sti_class = old
   end
 
   def test_nested_models_should_not_raise_exception_when_using_delete_all_dependency_on_association
-    old = SecondaryActiveRecord::Base.store_full_sti_class
-    SecondaryActiveRecord::Base.store_full_sti_class = true
+    old = ActiveRecord::Base.store_full_sti_class
+    ActiveRecord::Base.store_full_sti_class = true
 
     collection = Shop::Collection.first
-    assert !collection.products.empty?, "Collection should have products"
+    assert_not collection.products.empty?, "Collection should have products"
     assert_nothing_raised { collection.destroy }
   ensure
-    SecondaryActiveRecord::Base.store_full_sti_class = old
+    ActiveRecord::Base.store_full_sti_class = old
   end
 
   def test_nested_models_should_not_raise_exception_when_using_nullify_dependency_on_association
-    old = SecondaryActiveRecord::Base.store_full_sti_class
-    SecondaryActiveRecord::Base.store_full_sti_class = true
+    old = ActiveRecord::Base.store_full_sti_class
+    ActiveRecord::Base.store_full_sti_class = true
 
     product = Shop::Product.first
-    assert !product.variants.empty?, "Product should have variants"
+    assert_not product.variants.empty?, "Product should have variants"
     assert_nothing_raised { product.destroy }
   ensure
-    SecondaryActiveRecord::Base.store_full_sti_class = old
+    ActiveRecord::Base.store_full_sti_class = old
   end
 end

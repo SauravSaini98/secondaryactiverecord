@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class PetTreasure < SecondaryActiveRecord::Base
+class PetTreasure < ActiveRecord::Base
   self.table_name = "pets_treasures"
 
   belongs_to :pet

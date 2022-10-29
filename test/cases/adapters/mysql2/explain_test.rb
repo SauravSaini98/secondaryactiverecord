@@ -4,8 +4,8 @@ require "cases/helper"
 require "models/author"
 require "models/post"
 
-class Mysql2ExplainTest < SecondaryActiveRecord::Mysql2TestCase
-  fixtures :authors
+class Mysql2ExplainTest < ActiveRecord::Mysql2TestCase
+  fixtures :authors, :author_addresses
 
   def test_explain_for_one_query
     explain = Author.where(id: 1).explain

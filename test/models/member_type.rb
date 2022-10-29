@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class MemberType < SecondaryActiveRecord::Base
+class MemberType < ActiveRecord::Base
   has_many :members
 end

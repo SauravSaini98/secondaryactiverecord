@@ -8,7 +8,7 @@ require "models/developer"
 require "models/computer"
 require "models/company"
 
-class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
+class AssociationCallbacksTest < ActiveRecord::TestCase
   fixtures :posts, :authors, :author_addresses, :projects, :developers
 
   def setup
@@ -62,6 +62,23 @@ class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
                   "after_adding#{@thinking.id}", "after_adding_proc#{@thinking.id}"], @david.post_log
   end
 
+  def test_has_many_callbacks_halt_execution_when_abort_is_trown_when_adding_to_association
+    author = Author.create!(name: "Roger")
+    post = Post.create!(title: "hello", body: "abc")
+    author.posts_with_thrown_callbacks << post
+
+    assert_empty(author.posts_with_callbacks)
+  end
+
+  def test_has_many_callbacks_halt_execution_when_abort_is_trown_when_removing_from_association
+    author = Author.create!(name: "Roger")
+    post = Post.create!(title: "hello", body: "abc", author: author)
+
+    assert_equal(1, author.posts_with_thrown_callbacks.size)
+    author.posts_with_thrown_callbacks.destroy(post.id)
+    assert_equal(1, author.posts_with_thrown_callbacks.size)
+  end
+
   def test_has_many_callbacks_with_create
     morten = Author.create name: "Morten"
     post = morten.posts_with_proc_callbacks.create! title: "Hello", body: "How are you doing?"
@@ -95,7 +112,7 @@ class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
 
   def test_has_and_belongs_to_many_add_callback
     david = developers(:david)
-    ar = projects(:secondary_active_record)
+    ar = projects(:active_record)
     assert_empty ar.developers_log
     ar.developers_with_callbacks << david
     assert_equal ["before_adding#{david.id}", "after_adding#{david.id}"], ar.developers_log
@@ -126,7 +143,7 @@ class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
   end
 
   def test_has_and_belongs_to_many_after_add_called_after_save
-    ar = projects(:secondary_active_record)
+    ar = projects(:active_record)
     assert_empty ar.developers_log
     alice = Developer.new(name: "alice")
     ar.developers_with_callbacks << alice
@@ -142,7 +159,7 @@ class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
   def test_has_and_belongs_to_many_remove_callback
     david = developers(:david)
     jamis = developers(:jamis)
-    activerecord = projects(:secondary_active_record)
+    activerecord = projects(:active_record)
     assert_empty activerecord.developers_log
     activerecord.developers_with_callbacks.delete(david)
     assert_equal ["before_removing#{david.id}", "after_removing#{david.id}"], activerecord.developers_log
@@ -153,7 +170,7 @@ class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
   end
 
   def test_has_and_belongs_to_many_does_not_fire_callbacks_on_clear
-    activerecord = projects(:secondary_active_record)
+    activerecord = projects(:active_record)
     assert_empty activerecord.developers_log
     if activerecord.developers_with_callbacks.size == 0
       activerecord.developers << developers(:david)
@@ -166,7 +183,7 @@ class AssociationCallbacksTest < SecondaryActiveRecord::TestCase
     assert_empty activerecord.developers_log
   end
 
-  def test_has_many_and_belongs_to_many_callbacks_for_save_on_parent
+  def test_has_and_belongs_to_many_callbacks_for_save_on_parent
     project = Project.new name: "Callbacks"
     project.developers_with_callbacks.build name: "Jack", salary: 95000
 

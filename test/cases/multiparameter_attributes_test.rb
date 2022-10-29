@@ -4,7 +4,7 @@ require "cases/helper"
 require "models/topic"
 require "models/customer"
 
-class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
+class MultiParameterAttributeTest < ActiveRecord::TestCase
   fixtures :topics
 
   def test_multiparameter_attributes_on_date
@@ -78,7 +78,7 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_multiparameter_attributes_on_time_with_no_date
-    ex = assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    ex = assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       attributes = {
         "written_on(4i)" => "16", "written_on(5i)" => "24", "written_on(6i)" => "00"
       }
@@ -89,7 +89,7 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_multiparameter_attributes_on_time_with_invalid_time_params
-    ex = assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    ex = assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       attributes = {
         "written_on(1i)" => "2004", "written_on(2i)" => "6", "written_on(3i)" => "24",
         "written_on(4i)" => "2004", "written_on(5i)" => "36", "written_on(6i)" => "64",
@@ -107,12 +107,12 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
     }
     topic = Topic.find(1)
     topic.attributes = attributes
-    # testing against to_s(:db) representation because either a Time or a DateTime might be returned, depending on platform
-    assert_equal "1850-06-24 16:24:00", topic.written_on.to_s(:db)
+    # testing against to_fs(:db) representation because either a Time or a DateTime might be returned, depending on platform
+    assert_equal "1850-06-24 16:24:00", topic.written_on.to_fs(:db)
   end
 
   def test_multiparameter_attributes_on_time_will_raise_on_big_time_if_missing_date_parts
-    ex = assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    ex = assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       attributes = {
         "written_on(4i)" => "16", "written_on(5i)" => "24"
       }
@@ -123,7 +123,7 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_multiparameter_attributes_on_time_with_raise_on_small_time_if_missing_date_parts
-    ex = assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    ex = assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       attributes = {
         "written_on(4i)" => "16", "written_on(5i)" => "12", "written_on(6i)" => "02"
       }
@@ -336,7 +336,7 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_multiparameter_attributes_setting_time_but_not_date_on_date_field
-    assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       Topic.new("written_on(4i)" => "13", "written_on(5i)" => "55")
     end
   end
@@ -358,7 +358,7 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_multiparameter_assignment_of_aggregation_with_missing_values
-    ex = assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    ex = assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       customer = Customer.new
       address = Address.new("The Street", "The City", "The Country")
       attributes = { "address(2)" => address.city, "address(3)" => address.country }
@@ -376,7 +376,7 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_multiparameter_assignment_of_aggregation_with_large_index
-    ex = assert_raise(SecondaryActiveRecord::MultiparameterAssignmentErrors) do
+    ex = assert_raise(ActiveRecord::MultiparameterAssignmentErrors) do
       customer = Customer.new
       address = Address.new("The Street", "The City", "The Country")
       attributes = { "address(1)" => "The Street", "address(2)" => address.city, "address(3000)" => address.country }
@@ -394,6 +394,6 @@ class MultiParameterAttributeTest < SecondaryActiveRecord::TestCase
       "written_on(4i)" => "13",
       "written_on(5i)" => "55",
     )
-    refute_predicate topic, :written_on_came_from_user?
+    assert_not_predicate topic, :written_on_came_from_user?
   end
 end

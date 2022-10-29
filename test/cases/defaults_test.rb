@@ -5,11 +5,11 @@ require "support/schema_dumping_helper"
 require "models/default"
 require "models/entrant"
 
-class DefaultTest < SecondaryActiveRecord::TestCase
+class DefaultTest < ActiveRecord::TestCase
   def test_nil_defaults_for_not_null_columns
     %w(id name course_id).each do |name|
       column = Entrant.columns_hash[name]
-      assert !column.null, "#{name} column should be NOT NULL"
+      assert_not column.null, "#{name} column should be NOT NULL"
       assert_not column.default, "#{name} column should be DEFAULT 'nil'"
     end
   end
@@ -23,11 +23,11 @@ class DefaultTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class DefaultNumbersTest < SecondaryActiveRecord::TestCase
-  class DefaultNumber < SecondaryActiveRecord::Base; end
+class DefaultNumbersTest < ActiveRecord::TestCase
+  class DefaultNumber < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table :default_numbers do |t|
       t.integer :positive_integer, default: 7
       t.integer :negative_integer, default: -5
@@ -58,11 +58,11 @@ class DefaultNumbersTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class DefaultStringsTest < SecondaryActiveRecord::TestCase
-  class DefaultString < SecondaryActiveRecord::Base; end
+class DefaultStringsTest < ActiveRecord::TestCase
+  class DefaultString < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table :default_strings do |t|
       t.string :string_col, default: "Smith"
       t.string :string_col_with_quotes, default: "O'Connor"
@@ -83,13 +83,40 @@ class DefaultStringsTest < SecondaryActiveRecord::TestCase
   end
 end
 
+if supports_text_column_with_default?
+  class DefaultTextTest < ActiveRecord::TestCase
+    class DefaultText < ActiveRecord::Base; end
+
+    setup do
+      @connection = ActiveRecord::Base.connection
+      @connection.create_table :default_texts do |t|
+        t.text :text_col, default: "Smith"
+        t.text :text_col_with_quotes, default: "O'Connor"
+      end
+      DefaultText.reset_column_information
+    end
+
+    def test_default_texts
+      assert_equal "Smith", DefaultText.new.text_col
+    end
+
+    def test_default_texts_containing_single_quotes
+      assert_equal "O'Connor", DefaultText.new.text_col_with_quotes
+    end
+
+    teardown do
+      @connection.drop_table :default_texts
+    end
+  end
+end
+
 if current_adapter?(:PostgreSQLAdapter)
-  class PostgresqlDefaultExpressionTest < SecondaryActiveRecord::TestCase
+  class PostgresqlDefaultExpressionTest < ActiveRecord::TestCase
     include SchemaDumpingHelper
 
     test "schema dump includes default expression" do
       output = dump_table_schema("defaults")
-      if SecondaryActiveRecord::Base.connection.postgresql_version >= 100000
+      if ActiveRecord::Base.connection.database_version >= 100000
         assert_match %r/t\.date\s+"modified_date",\s+default: -> { "CURRENT_DATE" }/, output
         assert_match %r/t\.datetime\s+"modified_time",\s+default: -> { "CURRENT_TIMESTAMP" }/, output
       else
@@ -98,23 +125,37 @@ if current_adapter?(:PostgreSQLAdapter)
       end
       assert_match %r/t\.date\s+"modified_date_function",\s+default: -> { "now\(\)" }/, output
       assert_match %r/t\.datetime\s+"modified_time_function",\s+default: -> { "now\(\)" }/, output
+      assert_match %r/t\.datetime\s+"modified_time_without_precision",\s+precision: nil,\s+default: -> { "CURRENT_TIMESTAMP" }/, output
+      assert_match %r/t\.datetime\s+"modified_time_with_precision_0",\s+precision: 0,\s+default: -> { "CURRENT_TIMESTAMP" }/, output
     end
   end
 end
 
 if current_adapter?(:Mysql2Adapter)
-  class MysqlDefaultExpressionTest < SecondaryActiveRecord::TestCase
+  class MysqlDefaultExpressionTest < ActiveRecord::TestCase
     include SchemaDumpingHelper
 
-    if subsecond_precision_supported?
+    if supports_default_expression?
+      test "schema dump includes default expression" do
+        output = dump_table_schema("defaults")
+        assert_match %r/t\.binary\s+"uuid",\s+limit: 36,\s+default: -> { "\(uuid\(\)\)" }/i, output
+      end
+    end
+
+    if supports_datetime_with_precision?
       test "schema dump datetime includes default expression" do
         output = dump_table_schema("datetime_defaults")
-        assert_match %r/t\.datetime\s+"modified_datetime",\s+default: -> { "CURRENT_TIMESTAMP(?:\(\))?" }/i, output
+        assert_match %r/t\.datetime\s+"modified_datetime",\s+precision: nil,\s+default: -> { "CURRENT_TIMESTAMP(?:\(\))?" }/i, output
       end
 
       test "schema dump datetime includes precise default expression" do
         output = dump_table_schema("datetime_defaults")
-        assert_match %r/t\.datetime\s+"precise_datetime",.+default: -> { "CURRENT_TIMESTAMP\(6\)" }/i, output
+        assert_match %r/t\.datetime\s+"precise_datetime",\s+default: -> { "CURRENT_TIMESTAMP\(6\)" }/i, output
+      end
+
+      test "schema dump datetime includes precise default expression with on update" do
+        output = dump_table_schema("datetime_defaults")
+        assert_match %r/t\.datetime\s+"updated_datetime",\s+default: -> { "CURRENT_TIMESTAMP\(6\) ON UPDATE CURRENT_TIMESTAMP\(6\)" }/i, output
       end
 
       test "schema dump timestamp includes default expression" do
@@ -127,6 +168,11 @@ if current_adapter?(:Mysql2Adapter)
         assert_match %r/t\.timestamp\s+"precise_timestamp",.+default: -> { "CURRENT_TIMESTAMP\(6\)" }/i, output
       end
 
+      test "schema dump timestamp includes precise default expression with on update" do
+        output = dump_table_schema("timestamp_defaults")
+        assert_match %r/t\.timestamp\s+"updated_timestamp",.+default: -> { "CURRENT_TIMESTAMP\(6\) ON UPDATE CURRENT_TIMESTAMP\(6\)" }/i, output
+      end
+
       test "schema dump timestamp without default expression" do
         output = dump_table_schema("timestamp_defaults")
         assert_match %r/t\.timestamp\s+"nullable_timestamp"$/, output
@@ -134,10 +180,10 @@ if current_adapter?(:Mysql2Adapter)
     end
   end
 
-  class DefaultsTestWithoutTransactionalFixtures < SecondaryActiveRecord::TestCase
-    # SecondaryActiveRecord::Base#create! (and #save and other related methods) will
+  class DefaultsTestWithoutTransactionalFixtures < ActiveRecord::TestCase
+    # ActiveRecord::Base#create! (and #save and other related methods) will
     # open a new transaction. When in transactional tests mode, this will
-    # cause Secondary Active Record to create a new savepoint. However, since MySQL doesn't
+    # cause Active Record to create a new savepoint. However, since MySQL doesn't
     # support DDL transactions, creating a table will result in any created
     # savepoints to be automatically released. This in turn causes the savepoint
     # release code in AbstractAdapter#transaction to fail.
@@ -146,12 +192,13 @@ if current_adapter?(:Mysql2Adapter)
     self.use_transactional_tests = false
 
     def using_strict(strict)
-      connection = SecondaryActiveRecord::Base.remove_connection
-      SecondaryActiveRecord::Base.establish_connection connection.merge(strict: strict)
+      connection = ActiveRecord::Base.remove_connection
+      conn_hash = connection.configuration_hash
+      ActiveRecord::Base.establish_connection conn_hash.merge(strict: strict)
       yield
     ensure
-      SecondaryActiveRecord::Base.remove_connection
-      SecondaryActiveRecord::Base.establish_connection connection
+      ActiveRecord::Base.remove_connection
+      ActiveRecord::Base.establish_connection connection
     end
 
     # Strict mode controls how MySQL handles invalid or missing values
@@ -166,7 +213,7 @@ if current_adapter?(:Mysql2Adapter)
     # invalid or missing values and produces warnings. In strict mode,
     # you can produce this behavior by using INSERT IGNORE or UPDATE IGNORE.
     #
-    # https://dev.mysql.com/doc/refman/5.7/en/sql-mode.html#sql-mode-strict
+    # https://dev.mysql.com/doc/refman/en/sql-mode.html#sql-mode-strict
     def test_mysql_not_null_defaults_non_strict
       using_strict(false) do
         with_mysql_not_null_table do |klass|
@@ -196,13 +243,13 @@ if current_adapter?(:Mysql2Adapter)
           assert_nil record.non_null_text
           assert_nil record.non_null_blob
 
-          assert_raises(SecondaryActiveRecord::NotNullViolation) { klass.create }
+          assert_raises(ActiveRecord::NotNullViolation) { klass.create }
         end
       end
     end
 
     def with_mysql_not_null_table
-      klass = Class.new(SecondaryActiveRecord::Base)
+      klass = Class.new(ActiveRecord::Base)
       klass.table_name = "test_mysql_not_null_defaults"
       klass.connection.create_table klass.table_name do |t|
         t.integer :non_null_integer, null: false
@@ -214,6 +261,21 @@ if current_adapter?(:Mysql2Adapter)
       yield klass
     ensure
       klass.connection.drop_table(klass.table_name) rescue nil
+    end
+  end
+end
+
+if current_adapter?(:SQLite3Adapter)
+  class Sqlite3DefaultExpressionTest < ActiveRecord::TestCase
+    include SchemaDumpingHelper
+
+    test "schema dump includes default expression" do
+      output = dump_table_schema("defaults")
+      assert_match %r/t\.date\s+"modified_date",\s+default: -> { "CURRENT_DATE" }/, output
+      assert_match %r/t\.datetime\s+"modified_time",\s+default: -> { "CURRENT_TIMESTAMP" }/, output
+      assert_match %r/t\.datetime\s+"modified_time_without_precision",\s+precision: nil,\s+default: -> { "CURRENT_TIMESTAMP" }/, output
+      assert_match %r/t\.datetime\s+"modified_time_with_precision_0",\s+precision: 0,\s+default: -> { "CURRENT_TIMESTAMP" }/, output
+      assert_match %r/t\.integer\s+"random_number",\s+default: -> { "random\(\)" }/, output
     end
   end
 end

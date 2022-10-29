@@ -16,7 +16,7 @@ module SchemaLoadCounter
   end
 end
 
-class SchemaLoadingTest < SecondaryActiveRecord::TestCase
+class SchemaLoadingTest < ActiveRecord::TestCase
   def test_basic_model_is_loaded_once
     klass = define_model
     klass.new
@@ -43,9 +43,8 @@ class SchemaLoadingTest < SecondaryActiveRecord::TestCase
   end
 
   private
-
     def define_model
-      Class.new(SecondaryActiveRecord::Base) do
+      Class.new(ActiveRecord::Base) do
         include SchemaLoadCounter
         self.table_name = :lock_without_defaults
         yield self if block_given?

@@ -7,7 +7,7 @@ require "models/computer"
 require "models/owner"
 require "models/pet"
 
-class IntegrationTest < SecondaryActiveRecord::TestCase
+class IntegrationTest < ActiveRecord::TestCase
   fixtures :companies, :developers, :owners, :pets
 
   def test_to_param_should_return_string
@@ -108,12 +108,12 @@ class IntegrationTest < SecondaryActiveRecord::TestCase
 
   def test_cache_key_format_for_existing_record_with_updated_at
     dev = Developer.first
-    assert_equal "developers/#{dev.id}-#{dev.updated_at.utc.to_s(:usec)}", dev.cache_key
+    assert_equal "developers/#{dev.id}-#{dev.updated_at.utc.to_fs(:usec)}", dev.cache_key
   end
 
   def test_cache_key_format_for_existing_record_with_updated_at_and_custom_cache_timestamp_format
     dev = CachedDeveloper.first
-    assert_equal "cached_developers/#{dev.id}-#{dev.updated_at.utc.to_s(:number)}", dev.cache_key
+    assert_equal "cached_developers/#{dev.id}-#{dev.updated_at.utc.to_fs(:number)}", dev.cache_key
   end
 
   def test_cache_key_changes_when_child_touched
@@ -138,97 +138,106 @@ class IntegrationTest < SecondaryActiveRecord::TestCase
   def test_cache_key_for_updated_on
     dev = Developer.first
     dev.updated_at = nil
-    assert_equal "developers/#{dev.id}-#{dev.updated_on.utc.to_s(:usec)}", dev.cache_key
+    assert_equal "developers/#{dev.id}-#{dev.updated_on.utc.to_fs(:usec)}", dev.cache_key
   end
 
   def test_cache_key_for_newer_updated_at
     dev = Developer.first
     dev.updated_at += 3600
-    assert_equal "developers/#{dev.id}-#{dev.updated_at.utc.to_s(:usec)}", dev.cache_key
+    assert_equal "developers/#{dev.id}-#{dev.updated_at.utc.to_fs(:usec)}", dev.cache_key
   end
 
   def test_cache_key_for_newer_updated_on
     dev = Developer.first
     dev.updated_on += 3600
-    assert_equal "developers/#{dev.id}-#{dev.updated_on.utc.to_s(:usec)}", dev.cache_key
+    assert_equal "developers/#{dev.id}-#{dev.updated_on.utc.to_fs(:usec)}", dev.cache_key
   end
 
   def test_cache_key_format_is_precise_enough
-    skip("Subsecond precision is not supported") unless subsecond_precision_supported?
+    skip("Subsecond precision is not supported") unless supports_datetime_with_precision?
     dev = Developer.first
     key = dev.cache_key
-    dev.touch
+    travel_to dev.updated_at + 0.000001 do
+      dev.touch
+    end
     assert_not_equal key, dev.cache_key
   end
 
   def test_cache_key_format_is_not_too_precise
-    skip("Subsecond precision is not supported") unless subsecond_precision_supported?
     dev = Developer.first
     dev.touch
     key = dev.cache_key
     assert_equal key, dev.reload.cache_key
   end
 
-  def test_named_timestamps_for_cache_key
-    assert_deprecated do
-      owner = owners(:blackbeard)
-      assert_equal "owners/#{owner.id}-#{owner.happy_at.utc.to_s(:usec)}", owner.cache_key(:updated_at, :happy_at)
+  def test_cache_version_format_is_precise_enough
+    skip("Subsecond precision is not supported") unless supports_datetime_with_precision?
+    with_cache_versioning do
+      dev = Developer.first
+      version = dev.cache_version.to_param
+      travel_to Developer.first.updated_at + 0.000001 do
+        dev.touch
+      end
+      assert_not_equal version, dev.cache_version.to_param
     end
   end
 
-  def test_cache_key_when_named_timestamp_is_nil
-    assert_deprecated do
-      owner = owners(:blackbeard)
-      owner.happy_at = nil
-      assert_equal "owners/#{owner.id}", owner.cache_key(:happy_at)
+  def test_cache_version_format_is_not_too_precise
+    with_cache_versioning do
+      dev = Developer.first
+      dev.touch
+      key = dev.cache_version.to_param
+      assert_equal key, dev.reload.cache_version.to_param
     end
   end
 
   def test_cache_key_is_stable_with_versioning_on
-    Developer.cache_versioning = true
+    with_cache_versioning do
+      developer = Developer.first
+      first_key = developer.cache_key
 
-    developer = Developer.first
-    first_key = developer.cache_key
+      developer.touch
+      second_key = developer.cache_key
 
-    developer.touch
-    second_key = developer.cache_key
-
-    assert_equal first_key, second_key
-  ensure
-    Developer.cache_versioning = false
+      assert_equal first_key, second_key
+    end
   end
 
   def test_cache_version_changes_with_versioning_on
-    Developer.cache_versioning = true
+    with_cache_versioning do
+      developer     = Developer.first
+      first_version = developer.cache_version
 
-    developer     = Developer.first
-    first_version = developer.cache_version
+      travel 10.seconds do
+        developer.touch
+      end
 
-    travel 10.seconds do
-      developer.touch
+      second_version = developer.cache_version
+
+      assert_not_equal first_version, second_version
     end
-
-    second_version = developer.cache_version
-
-    assert_not_equal first_version, second_version
-  ensure
-    Developer.cache_versioning = false
   end
 
   def test_cache_key_retains_version_when_custom_timestamp_is_used
-    Developer.cache_versioning = true
+    with_cache_versioning do
+      developer = Developer.first
+      first_key = developer.cache_key_with_version
 
-    developer = Developer.first
-    first_key = developer.cache_key_with_version
+      travel 10.seconds do
+        developer.touch
+      end
 
-    travel 10.seconds do
-      developer.touch
+      second_key = developer.cache_key_with_version
+
+      assert_not_equal first_key, second_key
     end
+  end
 
-    second_key = developer.cache_key_with_version
-
-    assert_not_equal first_key, second_key
+  def with_cache_versioning(value = true)
+    @old_cache_versioning = ActiveRecord::Base.cache_versioning
+    ActiveRecord::Base.cache_versioning = value
+    yield
   ensure
-    Developer.cache_versioning = false
+    ActiveRecord::Base.cache_versioning = @old_cache_versioning
   end
 end

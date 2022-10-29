@@ -1,23 +1,35 @@
 # frozen_string_literal: true
 
-SecondaryActiveRecord::Schema.define do
-
-  if subsecond_precision_supported?
+ActiveRecord::Schema.define do
+  if supports_datetime_with_precision?
     create_table :datetime_defaults, force: true do |t|
-      t.datetime :modified_datetime, default: -> { "CURRENT_TIMESTAMP" }
-      t.datetime :precise_datetime, precision: 6, default: -> { "CURRENT_TIMESTAMP(6)" }
+      t.datetime :modified_datetime, precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+      t.datetime :precise_datetime, default: -> { "CURRENT_TIMESTAMP(6)" }
+      t.datetime :updated_datetime, default: -> { "CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)" }
     end
 
     create_table :timestamp_defaults, force: true do |t|
       t.timestamp :nullable_timestamp
-      t.timestamp :modified_timestamp, default: -> { "CURRENT_TIMESTAMP" }
+      t.timestamp :modified_timestamp, precision: nil, default: -> { "CURRENT_TIMESTAMP" }
       t.timestamp :precise_timestamp, precision: 6, default: -> { "CURRENT_TIMESTAMP(6)" }
+      t.timestamp :updated_timestamp, precision: 6, default: -> { "CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)" }
+    end
+  end
+
+  create_table :defaults, force: true do |t|
+    t.date :fixed_date, default: "2004-01-01"
+    t.datetime :fixed_time, default: "2004-01-01 00:00:00"
+    t.column :char1, "char(1)", default: "Y"
+    t.string :char2, limit: 50, default: "a varchar field"
+    if supports_default_expression?
+      t.binary :uuid, limit: 36, default: -> { "(uuid())" }
     end
   end
 
   create_table :binary_fields, force: true do |t|
     t.binary :var_binary, limit: 255
     t.binary :var_binary_large, limit: 4095
+
     t.tinyblob   :tiny_blob
     t.blob       :normal_blob
     t.mediumblob :medium_blob
@@ -27,10 +39,17 @@ SecondaryActiveRecord::Schema.define do
     t.mediumtext :medium_text
     t.longtext   :long_text
 
+    t.binary :tiny_blob_2, size: :tiny
+    t.binary :medium_blob_2, size: :medium
+    t.binary :long_blob_2, size: :long
+    t.text :tiny_text_2, size: :tiny
+    t.text :medium_text_2, size: :medium
+    t.text :long_text_2, size: :long
+
     t.index :var_binary
   end
 
-  create_table :key_tests, force: true, options: "ENGINE=MyISAM" do |t|
+  create_table :key_tests, force: true, options: "CHARSET=utf8 ENGINE=MyISAM" do |t|
     t.string :awesome
     t.string :pizza
     t.string :snacks
@@ -40,38 +59,26 @@ SecondaryActiveRecord::Schema.define do
   end
 
   create_table :collation_tests, id: false, force: true do |t|
-    t.string :string_cs_column, limit: 1, collation: "utf8_bin"
-    t.string :string_ci_column, limit: 1, collation: "utf8_general_ci"
+    t.string :string_cs_column, limit: 1, collation: "utf8mb4_bin"
+    t.string :string_ci_column, limit: 1, collation: "utf8mb4_general_ci"
     t.binary :binary_column,    limit: 1
   end
 
-  SecondaryActiveRecord::Base.connection.execute <<-SQL
-DROP PROCEDURE IF EXISTS ten;
-SQL
+  execute "DROP PROCEDURE IF EXISTS ten"
 
-  SecondaryActiveRecord::Base.connection.execute <<-SQL
-CREATE PROCEDURE ten() SQL SECURITY INVOKER
-BEGIN
-	select 10;
-END
-SQL
+  execute <<~SQL
+    CREATE PROCEDURE ten() SQL SECURITY INVOKER
+    BEGIN
+      SELECT 10;
+    END
+  SQL
 
-  SecondaryActiveRecord::Base.connection.execute <<-SQL
-DROP PROCEDURE IF EXISTS topics;
-SQL
+  execute "DROP PROCEDURE IF EXISTS topics"
 
-  SecondaryActiveRecord::Base.connection.execute <<-SQL
-CREATE PROCEDURE topics(IN num INT) SQL SECURITY INVOKER
-BEGIN
-  select * from topics limit num;
-END
-SQL
-
-  SecondaryActiveRecord::Base.connection.drop_table "enum_tests", if_exists: true
-
-  SecondaryActiveRecord::Base.connection.execute <<-SQL
-CREATE TABLE enum_tests (
-  enum_column ENUM('text','blob','tiny','medium','long','unsigned','bigint')
-)
-SQL
+  execute <<~SQL
+    CREATE PROCEDURE topics(IN num INT) SQL SECURITY INVOKER
+    BEGIN
+      SELECT * FROM topics LIMIT num;
+    END
+  SQL
 end

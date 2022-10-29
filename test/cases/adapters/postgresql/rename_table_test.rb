@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-class PostgresqlRenameTableTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlRenameTableTest < ActiveRecord::PostgreSQLTestCase
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table :before_rename, force: true
   end
 
@@ -14,20 +14,16 @@ class PostgresqlRenameTableTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   test "renaming a table also renames the primary key index" do
-    # sanity check
-    assert_equal 1, num_indices_named("before_rename_pkey")
-    assert_equal 0, num_indices_named("after_rename_pkey")
-
-    @connection.rename_table :before_rename, :after_rename
-
-    assert_equal 0, num_indices_named("before_rename_pkey")
-    assert_equal 1, num_indices_named("after_rename_pkey")
+    assert_changes(-> { num_indices_named("before_rename_pkey") }, from: 1, to: 0) do
+      assert_changes(-> { num_indices_named("after_rename_pkey") }, from: 0, to: 1) do
+        @connection.rename_table :before_rename, :after_rename
+      end
+    end
   end
 
   private
-
     def num_indices_named(name)
-      @connection.execute(<<-SQL).values.length
+      @connection.execute(<<~SQL).values.length
         SELECT 1 FROM "pg_index"
           JOIN "pg_class" ON "pg_index"."indexrelid" = "pg_class"."oid"
           WHERE "pg_class"."relname" = '#{name}'

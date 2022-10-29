@@ -3,10 +3,10 @@
 require "cases/helper"
 
 if current_adapter?(:Mysql2Adapter)
-  class TestAdapterWithInvalidConnection < SecondaryActiveRecord::TestCase
+  class TestAdapterWithInvalidConnection < ActiveRecord::TestCase
     self.use_transactional_tests = false
 
-    class Bird < SecondaryActiveRecord::Base
+    class Bird < ActiveRecord::Base
     end
 
     def setup

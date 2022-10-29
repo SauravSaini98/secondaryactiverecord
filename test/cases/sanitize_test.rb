@@ -6,34 +6,38 @@ require "models/author"
 require "models/post"
 require "models/customer"
 
-class SanitizeTest < SecondaryActiveRecord::TestCase
+class SanitizeTest < ActiveRecord::TestCase
   def setup
   end
 
   def test_sanitize_sql_array_handles_string_interpolation
-    quoted_bambi = SecondaryActiveRecord::Base.connection.quote_string("Bambi")
+    quoted_bambi = ActiveRecord::Base.connection.quote_string("Bambi")
     assert_equal "name='#{quoted_bambi}'", Binary.sanitize_sql_array(["name='%s'", "Bambi"])
     assert_equal "name='#{quoted_bambi}'", Binary.sanitize_sql_array(["name='%s'", "Bambi".mb_chars])
-    quoted_bambi_and_thumper = SecondaryActiveRecord::Base.connection.quote_string("Bambi\nand\nThumper")
+    quoted_bambi_and_thumper = ActiveRecord::Base.connection.quote_string("Bambi\nand\nThumper")
     assert_equal "name='#{quoted_bambi_and_thumper}'", Binary.sanitize_sql_array(["name='%s'", "Bambi\nand\nThumper"])
     assert_equal "name='#{quoted_bambi_and_thumper}'", Binary.sanitize_sql_array(["name='%s'", "Bambi\nand\nThumper".mb_chars])
   end
 
   def test_sanitize_sql_array_handles_bind_variables
-    quoted_bambi = SecondaryActiveRecord::Base.connection.quote("Bambi")
+    quoted_bambi = ActiveRecord::Base.connection.quote("Bambi")
     assert_equal "name=#{quoted_bambi}", Binary.sanitize_sql_array(["name=?", "Bambi"])
     assert_equal "name=#{quoted_bambi}", Binary.sanitize_sql_array(["name=?", "Bambi".mb_chars])
-    quoted_bambi_and_thumper = SecondaryActiveRecord::Base.connection.quote("Bambi\nand\nThumper")
+    quoted_bambi_and_thumper = ActiveRecord::Base.connection.quote("Bambi\nand\nThumper")
     assert_equal "name=#{quoted_bambi_and_thumper}", Binary.sanitize_sql_array(["name=?", "Bambi\nand\nThumper"])
     assert_equal "name=#{quoted_bambi_and_thumper}", Binary.sanitize_sql_array(["name=?", "Bambi\nand\nThumper".mb_chars])
   end
 
   def test_sanitize_sql_array_handles_named_bind_variables
-    quoted_bambi = SecondaryActiveRecord::Base.connection.quote("Bambi")
+    quoted_bambi = ActiveRecord::Base.connection.quote("Bambi")
     assert_equal "name=#{quoted_bambi}", Binary.sanitize_sql_array(["name=:name", name: "Bambi"])
-    assert_equal "name=#{quoted_bambi} AND id=1", Binary.sanitize_sql_array(["name=:name AND id=:id", name: "Bambi", id: 1])
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "name=#{quoted_bambi} AND id='1'", Binary.sanitize_sql_array(["name=:name AND id=:id", name: "Bambi", id: 1])
+    else
+      assert_equal "name=#{quoted_bambi} AND id=1", Binary.sanitize_sql_array(["name=:name AND id=:id", name: "Bambi", id: 1])
+    end
 
-    quoted_bambi_and_thumper = SecondaryActiveRecord::Base.connection.quote("Bambi\nand\nThumper")
+    quoted_bambi_and_thumper = ActiveRecord::Base.connection.quote("Bambi\nand\nThumper")
     assert_equal "name=#{quoted_bambi_and_thumper}", Binary.sanitize_sql_array(["name=:name", name: "Bambi\nand\nThumper"])
     assert_equal "name=#{quoted_bambi_and_thumper} AND name2=#{quoted_bambi_and_thumper}", Binary.sanitize_sql_array(["name=:name AND name2=:name", name: "Bambi\nand\nThumper"])
   end
@@ -91,18 +95,31 @@ class SanitizeTest < SecondaryActiveRecord::TestCase
     end
   end
 
+  def test_disallow_raw_sql_with_unknown_attribute_string
+    assert_raise(ActiveRecord::UnknownAttributeReference) { Binary.disallow_raw_sql!(["field(id, ?)"]) }
+  end
+
+  def test_disallow_raw_sql_with_unknown_attribute_sql_literal
+    assert_nothing_raised { Binary.disallow_raw_sql!([Arel.sql("field(id, ?)")]) }
+  end
+
   def test_bind_arity
     assert_nothing_raised                                { bind "" }
-    assert_raise(SecondaryActiveRecord::PreparedStatementInvalid) { bind "", 1 }
+    assert_raise(ActiveRecord::PreparedStatementInvalid) { bind "", 1 }
 
-    assert_raise(SecondaryActiveRecord::PreparedStatementInvalid) { bind "?" }
+    assert_raise(ActiveRecord::PreparedStatementInvalid) { bind "?" }
     assert_nothing_raised                                { bind "?", 1 }
-    assert_raise(SecondaryActiveRecord::PreparedStatementInvalid) { bind "?", 1, 1 }
+    assert_raise(ActiveRecord::PreparedStatementInvalid) { bind "?", 1, 1 }
   end
 
   def test_named_bind_variables
-    assert_equal "1", bind(":a", a: 1) # ' ruby-mode
-    assert_equal "1 1", bind(":a :a", a: 1)  # ' ruby-mode
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "'1'", bind(":a", a: 1) # ' ruby-mode
+      assert_equal "'1' '1'", bind(":a :a", a: 1)  # ' ruby-mode
+    else
+      assert_equal "1", bind(":a", a: 1) # ' ruby-mode
+      assert_equal "1 1", bind(":a :a", a: 1)  # ' ruby-mode
+    end
 
     assert_nothing_raised { bind("'+00:00'", foo: "bar") }
   end
@@ -110,7 +127,7 @@ class SanitizeTest < SecondaryActiveRecord::TestCase
   def test_named_bind_arity
     assert_nothing_raised                                { bind "name = :name", name: "37signals" }
     assert_nothing_raised                                { bind "name = :name", name: "37signals", id: 1 }
-    assert_raise(SecondaryActiveRecord::PreparedStatementInvalid) { bind "name = :name", id: 1 }
+    assert_raise(ActiveRecord::PreparedStatementInvalid) { bind "name = :name", id: 1 }
   end
 
   class SimpleEnumerable
@@ -126,36 +143,70 @@ class SanitizeTest < SecondaryActiveRecord::TestCase
   end
 
   def test_bind_enumerable
-    quoted_abc = %(#{SecondaryActiveRecord::Base.connection.quote('a')},#{SecondaryActiveRecord::Base.connection.quote('b')},#{SecondaryActiveRecord::Base.connection.quote('c')})
+    quoted_abc = %(#{ActiveRecord::Base.connection.quote('a')},#{ActiveRecord::Base.connection.quote('b')},#{ActiveRecord::Base.connection.quote('c')})
 
-    assert_equal "1,2,3", bind("?", [1, 2, 3])
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "'1','2','3'", bind("?", [1, 2, 3])
+    else
+      assert_equal "1,2,3", bind("?", [1, 2, 3])
+    end
     assert_equal quoted_abc, bind("?", %w(a b c))
 
-    assert_equal "1,2,3", bind(":a", a: [1, 2, 3])
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "'1','2','3'", bind(":a", a: [1, 2, 3])
+    else
+      assert_equal "1,2,3", bind(":a", a: [1, 2, 3])
+    end
     assert_equal quoted_abc, bind(":a", a: %w(a b c)) # '
 
-    assert_equal "1,2,3", bind("?", SimpleEnumerable.new([1, 2, 3]))
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "'1','2','3'", bind("?", SimpleEnumerable.new([1, 2, 3]))
+    else
+      assert_equal "1,2,3", bind("?", SimpleEnumerable.new([1, 2, 3]))
+    end
     assert_equal quoted_abc, bind("?", SimpleEnumerable.new(%w(a b c)))
 
-    assert_equal "1,2,3", bind(":a", a: SimpleEnumerable.new([1, 2, 3]))
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "'1','2','3'", bind(":a", a: SimpleEnumerable.new([1, 2, 3]))
+    else
+      assert_equal "1,2,3", bind(":a", a: SimpleEnumerable.new([1, 2, 3]))
+    end
     assert_equal quoted_abc, bind(":a", a: SimpleEnumerable.new(%w(a b c))) # '
   end
 
   def test_bind_empty_enumerable
-    quoted_nil = SecondaryActiveRecord::Base.connection.quote(nil)
+    quoted_nil = ActiveRecord::Base.connection.quote(nil)
     assert_equal quoted_nil, bind("?", [])
     assert_equal " in (#{quoted_nil})", bind(" in (?)", [])
     assert_equal "foo in (#{quoted_nil})", bind("foo in (?)", [])
   end
 
+  def test_bind_range
+    quoted_abc = %(#{ActiveRecord::Base.connection.quote('a')},#{ActiveRecord::Base.connection.quote('b')},#{ActiveRecord::Base.connection.quote('c')})
+    if current_adapter?(:Mysql2Adapter)
+      assert_equal "'0'", bind("?", 0..0)
+      assert_equal "'1','2','3'", bind("?", 1..3)
+    else
+      assert_equal "0", bind("?", 0..0)
+      assert_equal "1,2,3", bind("?", 1..3)
+    end
+    assert_equal quoted_abc, bind("?", "a"..."d")
+  end
+
+  def test_bind_empty_range
+    quoted_nil = ActiveRecord::Base.connection.quote(nil)
+    assert_equal quoted_nil, bind("?", 0...0)
+    assert_equal quoted_nil, bind("?", "a"..."a")
+  end
+
   def test_bind_empty_string
-    quoted_empty = SecondaryActiveRecord::Base.connection.quote("")
+    quoted_empty = ActiveRecord::Base.connection.quote("")
     assert_equal quoted_empty, bind("?", "")
   end
 
   def test_bind_chars
-    quoted_bambi = SecondaryActiveRecord::Base.connection.quote("Bambi")
-    quoted_bambi_and_thumper = SecondaryActiveRecord::Base.connection.quote("Bambi\nand\nThumper")
+    quoted_bambi = ActiveRecord::Base.connection.quote("Bambi")
+    quoted_bambi_and_thumper = ActiveRecord::Base.connection.quote("Bambi\nand\nThumper")
     assert_equal "name=#{quoted_bambi}", bind("name=?", "Bambi")
     assert_equal "name=#{quoted_bambi_and_thumper}", bind("name=?", "Bambi\nand\nThumper")
     assert_equal "name=#{quoted_bambi}", bind("name=?", "Bambi".mb_chars)
@@ -165,21 +216,15 @@ class SanitizeTest < SecondaryActiveRecord::TestCase
   def test_named_bind_with_postgresql_type_casts
     l = Proc.new { bind(":a::integer '2009-01-01'::date", a: "10") }
     assert_nothing_raised(&l)
-    assert_equal "#{SecondaryActiveRecord::Base.connection.quote('10')}::integer '2009-01-01'::date", l.call
-  end
-
-  def test_deprecated_expand_hash_conditions_for_aggregates
-    assert_deprecated do
-      assert_equal({ "balance" => 50 }, Customer.send(:expand_hash_conditions_for_aggregates, balance: Money.new(50)))
-    end
+    assert_equal "#{ActiveRecord::Base.connection.quote('10')}::integer '2009-01-01'::date", l.call
   end
 
   private
     def bind(statement, *vars)
       if vars.first.is_a?(Hash)
-        SecondaryActiveRecord::Base.send(:replace_named_bind_variables, statement, vars.first)
+        ActiveRecord::Base.send(:replace_named_bind_variables, statement, vars.first)
       else
-        SecondaryActiveRecord::Base.send(:replace_bind_variables, statement, vars)
+        ActiveRecord::Base.send(:replace_bind_variables, statement, vars)
       end
     end
 end

@@ -9,7 +9,7 @@ require "models/author"
 require "models/developer"
 require "models/computer"
 
-class NamedScopingTest < SecondaryActiveRecord::TestCase
+class NamedScopingTest < ActiveRecord::TestCase
   fixtures :posts, :authors, :topics, :comments, :author_addresses
 
   def test_implements_enumerable
@@ -56,12 +56,17 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
   end
 
   def test_method_missing_priority_when_delegating
-    klazz = Class.new(SecondaryActiveRecord::Base) do
+    klazz = Class.new(ActiveRecord::Base) do
       self.table_name = "topics"
       scope :since, Proc.new { where("written_on >= ?", Time.now - 1.day) }
       scope :to,    Proc.new { where("written_on <= ?", Time.now) }
     end
     assert_equal klazz.to.since.to_a, klazz.since.to.to_a
+  end
+
+  def test_define_scope_for_reserved_words
+    assert Topic.true.all?(&:approved?), "all objects should be approved"
+    assert Topic.false.none?(&:approved?), "all objects should not be approved"
   end
 
   def test_scope_should_respond_to_own_methods_and_methods_of_the_proxy
@@ -86,7 +91,7 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
   def test_scopes_are_composable
     assert_equal((approved = Topic.all.merge!(where: { approved: true }).to_a), Topic.approved)
     assert_equal((replied = Topic.all.merge!(where: "replies_count > 0").to_a), Topic.replied)
-    assert !(approved == replied)
+    assert_not (approved == replied)
     assert_not_empty (approved & replied)
 
     assert_equal approved & replied, Topic.approved.replied
@@ -107,10 +112,36 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
     assert_equal all_topics, Topic.written_before(nil)
   end
 
+  def test_positional_scope_method
+    stats = {}
+    topics = Topic.all.scope_stats(stats)
+
+    assert_equal topics.count, stats[:count]
+  end
+
+  def test_positional_klass_method
+    stats = {}
+    topics = Topic.all.klass_stats(stats)
+
+    assert_equal topics.count, stats[:count]
+  end
+
   def test_scope_with_object
     objects = Topic.with_object
     assert_operator objects.length, :>, 0
     assert objects.all?(&:approved?), "all objects should be approved"
+  end
+
+  def test_scope_with_kwargs
+    # Explicit true
+    topics = Topic.with_kwargs(approved: true)
+    assert_operator topics.length, :>, 0
+    assert topics.all?(&:approved?), "all objects should be approved"
+
+    # No arguments
+    topics = Topic.with_kwargs()
+    assert_operator topics.length, :>, 0
+    assert topics.none?(&:approved?), "all objects should not be approved"
   end
 
   def test_has_many_associations_have_access_to_scopes
@@ -163,7 +194,7 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
       e = assert_raises ArgumentError do
         Class.new(Post).class_eval { scope name, -> { where(approved: true) } }
       end
-      assert_match(/You tried to define a scope named \"#{name}\" on the model/, e.message)
+      assert_match(/You tried to define a scope named "#{name}" on the model/, e.message)
     end
   end
 
@@ -303,15 +334,8 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
     assert_equal "lifo", topic.author_name
   end
 
-  def test_deprecated_delegating_private_method
-    assert_deprecated do
-      scope = Topic.all.by_private_lifo
-      assert_not scope.instance_variable_get(:@delegate_to_klass)
-    end
-  end
-
   def test_reserved_scope_names
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "topics"
 
       scope :approved, -> { where(approved: true) }
@@ -356,12 +380,12 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
       e = assert_raises(ArgumentError, "scope `#{name}` should not be allowed") do
         klass.class_eval { scope name, -> { where(approved: true) } }
       end
-      assert_match(/You tried to define a scope named \"#{name}\" on the model/, e.message)
+      assert_match(/You tried to define a scope named "#{name}" on the model/, e.message)
 
       e = assert_raises(ArgumentError, "scope `#{name}` should not be allowed") do
         subklass.class_eval { scope name, -> { where(approved: true) } }
       end
-      assert_match(/You tried to define a scope named \"#{name}\" on the model/, e.message)
+      assert_match(/You tried to define a scope named "#{name}" on the model/, e.message)
     end
 
     non_conflicts.each do |name|
@@ -381,13 +405,13 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
   # has been done by evaluating a string with a plain def statement. For scope
   # names which contain spaces this approach doesn't work.
   def test_spaces_in_scope_names
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "topics"
-      scope :"title containing space", -> { where("title LIKE '% %'") }
+      scope :"title containing space", ->(space: " ") { where("title LIKE '%#{space}%'") }
       scope :approved, -> { where(approved: true) }
     end
-    assert_equal klass.send(:"title containing space"), klass.where("title LIKE '% %'")
-    assert_equal klass.approved.send(:"title containing space"), klass.approved.where("title LIKE '% %'")
+    assert_equal klass.where("title LIKE '% %'"), klass.public_send(:"title containing space", space: " ")
+    assert_equal klass.approved.where("title LIKE '% %'"), klass.approved.public_send(:"title containing space", space: " ")
   end
 
   def test_find_all_should_behave_like_select
@@ -454,6 +478,20 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
     assert_equal [posts(:sti_comments)], Post.with_special_comments.with_post(4).to_a.uniq
   end
 
+  def test_class_method_in_scope
+    assert_equal topics(:second, :fourth), topics(:first).approved_replies.ordered
+  end
+
+  def test_chaining_doesnt_leak_conditions_to_another_scopes
+    expected = Topic.where(approved: false).where(id: Topic.children.select(:parent_id))
+    assert_equal expected.to_a, Topic.rejected.has_children.to_a
+  end
+
+  def test_nested_scoping
+    expected = Reply.approved
+    assert_equal expected.to_a, Topic.rejected.nested_scoping(expected)
+  end
+
   def test_scopes_batch_finders
     assert_equal 4, Topic.approved.count
 
@@ -471,25 +509,6 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
   def test_table_names_for_chaining_scopes_with_and_without_table_name_included
     assert_nothing_raised do
       Comment.for_first_post.for_first_author.to_a
-    end
-  end
-
-  def test_scopes_with_reserved_names
-    class << Topic
-      def public_method; end
-      public :public_method
-
-      def protected_method; end
-      protected :protected_method
-
-      def private_method; end
-      private :private_method
-    end
-
-    [:public_method, :protected_method, :private_method].each do |reserved_method|
-      assert Topic.respond_to?(reserved_method, true)
-      SecondaryActiveRecord::Base.logger.expects(:warn)
-      silence_warnings { Topic.scope(reserved_method, -> {}) }
     end
   end
 
@@ -554,8 +573,8 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
 
     [:destroy_all, :reset, :delete_all].each do |method|
       before = post.comments.containing_the_letter_e
-      post.association(:comments).send(method)
-      assert before.object_id != post.comments.containing_the_letter_e.object_id, "CollectionAssociation##{method} should reset the named scopes cache"
+      post.association(:comments).public_send(method)
+      assert_not_same before, post.comments.containing_the_letter_e, "CollectionAssociation##{method} should reset the named scopes cache"
     end
   end
 
@@ -566,7 +585,7 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
   end
 
   def test_eager_default_scope_relations_are_remove
-    klass = Class.new(SecondaryActiveRecord::Base)
+    klass = Class.new(ActiveRecord::Base)
     klass.table_name = "posts"
 
     assert_raises(ArgumentError) do
@@ -575,7 +594,7 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
   end
 
   def test_subclass_merges_scopes_properly
-    assert_equal 1, SpecialComment.where(body: "go crazy").created.count
+    assert_equal 1, SpecialComment.where(body: "go wild").created.count
   end
 
   def test_model_class_should_respond_to_extending
@@ -596,5 +615,15 @@ class NamedScopingTest < SecondaryActiveRecord::TestCase
     assert_not_predicate Topic, :one?
     Topic.create!
     assert_predicate Topic, :one?
+  end
+
+  def test_scope_with_annotation
+    Topic.class_eval do
+      scope :including_annotate_in_scope, Proc.new { annotate("from-scope") }
+    end
+
+    assert_sql(%r{/\* from-scope \*/}) do
+      assert_equal Topic.including_annotate_in_scope.to_a, Topic.all.to_a
+    end
   end
 end

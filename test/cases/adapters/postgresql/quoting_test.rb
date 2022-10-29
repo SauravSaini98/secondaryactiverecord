@@ -2,12 +2,12 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   module ConnectionAdapters
     class PostgreSQLAdapter
-      class QuotingTest < SecondaryActiveRecord::PostgreSQLTestCase
+      class QuotingTest < ActiveRecord::PostgreSQLTestCase
         def setup
-          @conn = SecondaryActiveRecord::Base.connection
+          @conn = ActiveRecord::Base.connection
         end
 
         def test_type_cast_true
@@ -38,6 +38,11 @@ module SecondaryActiveRecord
           value = "'); SELECT * FROM users; /*\n01\n*/--"
           type = OID::Bit.new
           assert_nil @conn.quote(type.serialize(value))
+        end
+
+        def test_quote_table_name_with_spaces
+          value = "user posts"
+          assert_equal "\"user posts\"", @conn.quote_table_name(value)
         end
       end
     end

@@ -2,7 +2,7 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
     class << self; attr_accessor :message_count; end
     self.message_count = 0
@@ -12,13 +12,13 @@ module SecondaryActiveRecord
 
       CONNECTION_METHODS = %w[add_column remove_column rename_column add_index change_column rename_table column_exists? index_exists? add_reference add_belongs_to remove_reference remove_references remove_belongs_to]
 
-      class TestModel < SecondaryActiveRecord::Base
+      class TestModel < ActiveRecord::Base
         self.table_name = :test_models
       end
 
       def setup
         super
-        @connection = SecondaryActiveRecord::Base.connection
+        @connection = ActiveRecord::Base.connection
         connection.create_table :test_models do |t|
           t.timestamps null: true
         end
@@ -34,7 +34,6 @@ module SecondaryActiveRecord
       end
 
       private
-
         delegate(*CONNECTION_METHODS, to: :connection)
     end
   end

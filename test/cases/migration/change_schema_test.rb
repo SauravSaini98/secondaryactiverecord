@@ -2,21 +2,21 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class ChangeSchemaTest < SecondaryActiveRecord::TestCase
+    class ChangeSchemaTest < ActiveRecord::TestCase
       attr_reader :connection, :table_name
 
       def setup
         super
-        @connection = SecondaryActiveRecord::Base.connection
+        @connection = ActiveRecord::Base.connection
         @table_name = :testings
       end
 
       teardown do
         connection.drop_table :testings rescue nil
-        SecondaryActiveRecord::Base.primary_key_prefix_type = nil
-        SecondaryActiveRecord::Base.clear_cache!
+        ActiveRecord::Base.primary_key_prefix_type = nil
+        ActiveRecord::Base.clear_cache!
       end
 
       def test_create_table_without_id
@@ -45,7 +45,7 @@ module SecondaryActiveRecord
           t.column :foo, :string, null: false
         end
 
-        assert_raises(SecondaryActiveRecord::NotNullViolation) do
+        assert_raises(ActiveRecord::NotNullViolation) do
           connection.execute "insert into testings (foo) values (NULL)"
         end
       end
@@ -144,10 +144,10 @@ module SecondaryActiveRecord
           assert_equal "integer", four.sql_type
           assert_equal "bigint", eight.sql_type
         elsif current_adapter?(:Mysql2Adapter)
-          assert_match "int(11)", default.sql_type
-          assert_match "tinyint", one.sql_type
-          assert_match "int", four.sql_type
-          assert_match "bigint", eight.sql_type
+          assert_match %r/\Aint/, default.sql_type
+          assert_match %r/\Atinyint/, one.sql_type
+          assert_match %r/\Aint/, four.sql_type
+          assert_match %r/\Abigint/, eight.sql_type
         elsif current_adapter?(:OracleAdapter)
           assert_equal "NUMBER(38)", default.sql_type
           assert_equal "NUMBER(1)", one.sql_type
@@ -157,7 +157,7 @@ module SecondaryActiveRecord
       end
 
       def test_create_table_with_primary_key_prefix_as_table_name_with_underscore
-        SecondaryActiveRecord::Base.primary_key_prefix_type = :table_name_with_underscore
+        ActiveRecord::Base.primary_key_prefix_type = :table_name_with_underscore
 
         connection.create_table :testings do |t|
           t.column :foo, :string
@@ -167,7 +167,7 @@ module SecondaryActiveRecord
       end
 
       def test_create_table_with_primary_key_prefix_as_table_name
-        SecondaryActiveRecord::Base.primary_key_prefix_type = :table_name
+        ActiveRecord::Base.primary_key_prefix_type = :table_name
 
         connection.create_table :testings do |t|
           t.column :foo, :string
@@ -196,6 +196,17 @@ module SecondaryActiveRecord
         assert_equal "you can't redefine the primary key column 'testing_id'. To define a custom primary key, pass { id: false } to create_table.", error.message
       end
 
+      def test_create_table_raises_when_defining_existing_column
+        error = assert_raise(ArgumentError) do
+          connection.create_table :testings do |t|
+            t.column :testing_column, :string
+            t.column :testing_column, :integer
+          end
+        end
+
+        assert_equal "you can't define an already defined column 'testing_column'.", error.message
+      end
+
       def test_create_table_with_timestamps_should_create_datetime_columns
         connection.create_table table_name do |t|
           t.timestamps
@@ -205,8 +216,8 @@ module SecondaryActiveRecord
         created_at_column = created_columns.detect { |c| c.name == "created_at" }
         updated_at_column = created_columns.detect { |c| c.name == "updated_at" }
 
-        assert !created_at_column.null
-        assert !updated_at_column.null
+        assert_not created_at_column.null
+        assert_not updated_at_column.null
       end
 
       def test_create_table_with_timestamps_should_create_datetime_columns_with_options
@@ -235,7 +246,7 @@ module SecondaryActiveRecord
           end
           connection.add_column :testings, :bar, :string, null: false
 
-          assert_raise(SecondaryActiveRecord::NotNullViolation) do
+          assert_raise(ActiveRecord::NotNullViolation) do
             connection.execute "insert into testings (foo, bar) values ('hello', NULL)"
           end
         end
@@ -254,7 +265,7 @@ module SecondaryActiveRecord
           connection.add_column :testings, :bar, :string, null: false, default: "default"
         end
 
-        assert_raises(SecondaryActiveRecord::NotNullViolation) do
+        assert_raises(ActiveRecord::NotNullViolation) do
           connection.execute("insert into testings (#{quoted_id}, #{quoted_foo}, #{quoted_bar}) values (2, 'hello', NULL)")
         end
       end
@@ -275,7 +286,63 @@ module SecondaryActiveRecord
         elsif current_adapter?(:OracleAdapter)
           assert_equal "TIMESTAMP(6)", column.sql_type
         else
-          assert_equal connection.type_to_sql("datetime"), column.sql_type
+          assert_equal connection.type_to_sql("datetime(6)"), column.sql_type
+        end
+      end
+
+      def test_add_column_with_postgresql_datetime_type
+        connection.create_table :testings do |t|
+          t.column :foo, :datetime
+        end
+
+        column = connection.columns(:testings).find { |c| c.name == "foo" }
+
+        assert_equal :datetime, column.type
+
+        if current_adapter?(:PostgreSQLAdapter)
+          assert_equal "timestamp(6) without time zone", column.sql_type
+        elsif current_adapter?(:Mysql2Adapter)
+          sql_type = supports_datetime_with_precision? ? "datetime(6)" : "datetime"
+          assert_equal sql_type, column.sql_type
+        else
+          assert_equal connection.type_to_sql("datetime(6)"), column.sql_type
+        end
+      end
+
+      if current_adapter?(:PostgreSQLAdapter)
+        def test_add_column_with_datetime_in_timestamptz_mode
+          with_postgresql_datetime_type(:timestamptz) do
+            connection.create_table :testings do |t|
+              t.column :foo, :datetime
+            end
+
+            column = connection.columns(:testings).find { |c| c.name == "foo" }
+
+            assert_equal :datetime, column.type
+            assert_equal "timestamp(6) with time zone", column.sql_type
+          end
+        end
+      end
+
+      def test_change_column_with_timestamp_type
+        connection.create_table :testings do |t|
+          t.column :foo, :datetime, null: false
+        end
+
+        connection.change_column :testings, :foo, :timestamp
+
+        column = connection.columns(:testings).find { |c| c.name == "foo" }
+
+        assert_equal :datetime, column.type
+
+        if current_adapter?(:PostgreSQLAdapter)
+          assert_equal "timestamp without time zone", column.sql_type
+        elsif current_adapter?(:Mysql2Adapter)
+          assert_equal "timestamp", column.sql_type
+        elsif current_adapter?(:OracleAdapter)
+          assert_equal "TIMESTAMP(6)", column.sql_type
+        else
+          assert_equal connection.type_to_sql("datetime(6)"), column.sql_type
         end
       end
 
@@ -298,7 +365,7 @@ module SecondaryActiveRecord
         connection.create_table :testings do |t|
           t.column :title, :string
         end
-        person_klass = Class.new(SecondaryActiveRecord::Base)
+        person_klass = Class.new(ActiveRecord::Base)
         person_klass.table_name = "testings"
 
         person_klass.connection.add_column "testings", "wealth", :integer, null: false, default: 99
@@ -348,7 +415,7 @@ module SecondaryActiveRecord
 
       def test_change_column_null
         testing_table_with_only_foo_attribute do
-          notnull_migration = Class.new(SecondaryActiveRecord::Migration::Current) do
+          notnull_migration = Class.new(ActiveRecord::Migration::Current) do
             def change
               change_column_null :testings, :foo, false
             end
@@ -408,7 +475,7 @@ module SecondaryActiveRecord
         end
         connection.change_table :testings do |t|
           assert t.column_exists?(:foo)
-          assert !(t.column_exists?(:bar))
+          assert_not (t.column_exists?(:bar))
         end
       end
 
@@ -433,12 +500,12 @@ module SecondaryActiveRecord
         end
     end
 
-    if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
-      class ChangeSchemaWithDependentObjectsTest < SecondaryActiveRecord::TestCase
+    if ActiveRecord::Base.connection.supports_foreign_keys?
+      class ChangeSchemaWithDependentObjectsTest < ActiveRecord::TestCase
         self.use_transactional_tests = false
 
         setup do
-          @connection = SecondaryActiveRecord::Base.connection
+          @connection = ActiveRecord::Base.connection
           @connection.create_table :trains
           @connection.create_table(:wagons) { |t| t.references :train }
           @connection.add_foreign_key :wagons, :trains
@@ -451,9 +518,13 @@ module SecondaryActiveRecord
         end
 
         def test_create_table_with_force_cascade_drops_dependent_objects
-          skip "MySQL > 5.5 does not drop dependent objects with DROP TABLE CASCADE" if current_adapter?(:Mysql2Adapter)
+          if current_adapter?(:Mysql2Adapter)
+            skip "MySQL > 5.5 does not drop dependent objects with DROP TABLE CASCADE"
+          elsif current_adapter?(:SQLite3Adapter)
+            skip "SQLite3 does not support DROP TABLE CASCADE syntax"
+          end
           # can't re-create table referenced by foreign key
-          assert_raises(SecondaryActiveRecord::StatementInvalid) do
+          assert_raises(ActiveRecord::StatementInvalid) do
             @connection.create_table :trains, force: true
           end
 

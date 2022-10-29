@@ -3,24 +3,20 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlLtreeTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlLtreeTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
-  class Ltree < SecondaryActiveRecord::Base
+  class Ltree < ActiveRecord::Base
     self.table_name = "ltrees"
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
 
     enable_extension!("ltree", @connection)
 
-    @connection.transaction do
-      @connection.create_table("ltrees") do |t|
-        t.ltree "path"
-      end
+    @connection.create_table("ltrees") do |t|
+      t.ltree "path"
     end
-  rescue SecondaryActiveRecord::StatementInvalid
-    skip "do not test on PG without ltree"
   end
 
   teardown do

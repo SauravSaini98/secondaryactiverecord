@@ -3,12 +3,12 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlFullTextTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlFullTextTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
-  class Tsvector < SecondaryActiveRecord::Base; end
+  class Tsvector < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("tsvectors") do |t|
       t.tsvector "text_vector"
     end

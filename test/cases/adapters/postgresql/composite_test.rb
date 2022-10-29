@@ -6,22 +6,22 @@ require "support/connection_helper"
 module PostgresqlCompositeBehavior
   include ConnectionHelper
 
-  class PostgresqlComposite < SecondaryActiveRecord::Base
+  class PostgresqlComposite < ActiveRecord::Base
     self.table_name = "postgresql_composites"
   end
 
   def setup
     super
 
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.transaction do
-      @connection.execute <<-SQL
-         CREATE TYPE full_address AS
-         (
-             city VARCHAR(90),
-             street VARCHAR(90)
-         );
-        SQL
+      @connection.execute <<~SQL
+        CREATE TYPE full_address AS
+        (
+          city VARCHAR(90),
+          street VARCHAR(90)
+        );
+      SQL
       @connection.create_table("postgresql_composites") do |t|
         t.column :address, :full_address
       end
@@ -42,7 +42,7 @@ end
 #   "unknown OID 5653508: failed to recognize type of 'address'. It will be treated as String."
 # To take full advantage of composite types, we suggest you register your own +OID::Type+.
 # See PostgresqlCompositeWithCustomOIDTest
-class PostgresqlCompositeTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlCompositeTest < ActiveRecord::PostgreSQLTestCase
   include PostgresqlCompositeBehavior
 
   def test_column
@@ -79,10 +79,10 @@ class PostgresqlCompositeTest < SecondaryActiveRecord::PostgreSQLTestCase
     end
 end
 
-class PostgresqlCompositeWithCustomOIDTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlCompositeWithCustomOIDTest < ActiveRecord::PostgreSQLTestCase
   include PostgresqlCompositeBehavior
 
-  class FullAddressType < SecondaryActiveRecord::Type::Value
+  class FullAddressType < ActiveRecord::Type::Value
     def type; :full_address end
 
     def deserialize(value)

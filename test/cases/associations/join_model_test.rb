@@ -18,7 +18,7 @@ require "models/aircraft"
 require "models/engine"
 require "models/car"
 
-class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
+class AssociationsJoinModelTest < ActiveRecord::TestCase
   self.use_transactional_tests = false unless supports_savepoints?
 
   fixtures :posts, :authors, :author_addresses, :categories, :categorizations, :comments, :tags, :taggings, :author_favorites, :vertices, :items, :books,
@@ -338,7 +338,18 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
   end
 
   def test_unavailable_through_reflection
-    assert_raise(SecondaryActiveRecord::HasManyThroughAssociationNotFoundError) { authors(:david).nothings }
+    assert_raise(ActiveRecord::HasManyThroughAssociationNotFoundError) { authors(:david).nothings }
+  end
+
+  def test_exceptions_have_suggestions_for_fix
+    error = assert_raise(ActiveRecord::HasManyThroughAssociationNotFoundError) {
+      authors(:david).nothings
+    }
+    if error.respond_to?(:detailed_message)
+      assert_match "Did you mean?", error.detailed_message
+    else
+      assert_match "Did you mean?", error.message
+    end
   end
 
   def test_has_many_through_join_model_with_conditions
@@ -347,15 +358,15 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
   end
 
   def test_has_many_polymorphic
-    assert_raise SecondaryActiveRecord::HasManyThroughAssociationPolymorphicSourceError do
+    assert_raise ActiveRecord::HasManyThroughAssociationPolymorphicSourceError do
       tags(:general).taggables
     end
 
-    assert_raise SecondaryActiveRecord::HasManyThroughAssociationPolymorphicThroughError do
+    assert_raise ActiveRecord::HasManyThroughAssociationPolymorphicThroughError do
       taggings(:welcome_general).things
     end
 
-    assert_raise SecondaryActiveRecord::EagerLoadPolymorphicError do
+    assert_raise ActiveRecord::EagerLoadPolymorphicError do
       tags(:general).taggings.includes(:taggable).where("bogus_table.column = 1").references(:bogus_table).to_a
     end
   end
@@ -369,7 +380,7 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
     Tag.has_many :null_taggings, -> { none }, class_name: :Tagging
     Tag.has_many :null_tagged_posts, through: :null_taggings, source: "taggable", source_type: "Post"
     assert_equal [], tags(:general).null_tagged_posts
-    refute_equal [], tags(:general).tagged_posts
+    assert_not_equal [], tags(:general).tagged_posts
   end
 
   def test_eager_has_many_polymorphic_with_source_type
@@ -423,7 +434,7 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
     author = Author.all.merge!(where: ["name = ?", "David"], includes: :comments, order: "comments.id").first
     SpecialComment.new; VerySpecialComment.new
     assert_no_queries do
-      assert_equal [1, 2, 3, 5, 6, 7, 8, 9, 10, 12], author.comments.collect(&:id)
+      assert_equal [1, 2, 3, 5, 6, 7, 8, 9, 10, 12, 13], author.comments.collect(&:id)
     end
   end
 
@@ -528,7 +539,7 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
 
   def test_has_many_through_collection_size_doesnt_load_target_if_not_loaded
     author = authors(:david)
-    assert_equal 10, author.comments.size
+    assert_equal 11, author.comments.size
     assert_not_predicate author.comments, :loaded?
   end
 
@@ -540,7 +551,7 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
   end
 
   def test_adding_junk_to_has_many_through_should_raise_type_mismatch
-    assert_raise(SecondaryActiveRecord::AssociationTypeMismatch) { posts(:thinking).tags << "Uhh what now?" }
+    assert_raise(ActiveRecord::AssociationTypeMismatch) { posts(:thinking).tags << "Uhh what now?" }
   end
 
   def test_adding_to_has_many_through_should_return_self
@@ -596,7 +607,7 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
   end
 
   def test_deleting_junk_from_has_many_through_should_raise_type_mismatch
-    assert_raise(SecondaryActiveRecord::AssociationTypeMismatch) { posts(:thinking).tags.delete(Object.new) }
+    assert_raise(ActiveRecord::AssociationTypeMismatch) { posts(:thinking).tags.delete(Object.new) }
   end
 
   def test_deleting_by_integer_id_from_has_many_through
@@ -732,14 +743,14 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
     category = Category.create!(name: "Not Associated")
 
     assert_not_predicate david.categories, :loaded?
-    assert ! david.categories.include?(category)
+    assert_not david.categories.include?(category)
   end
 
   def test_has_many_through_goes_through_all_sti_classes
     sub_sti_post = SubStiPost.create!(title: "test", body: "test", author_id: 1)
     new_comment = sub_sti_post.comments.create(body: "test")
 
-    assert_equal [9, 10, new_comment.id], authors(:david).sti_post_comments.map(&:id).sort
+    assert_equal [9, 10, 13, new_comment.id], authors(:david).sti_post_comments.map(&:id).sort
   end
 
   def test_has_many_with_pluralize_table_names_false
@@ -749,17 +760,17 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
   end
 
   def test_proper_error_message_for_eager_load_and_includes_association_errors
-    includes_error = assert_raises(SecondaryActiveRecord::ConfigurationError) {
+    includes_error = assert_raises(ActiveRecord::ConfigurationError) {
       Post.includes(:nonexistent_relation).where(nonexistent_relation: { name: "Rochester" }).find(1)
     }
     assert_equal("Can't join 'Post' to association named 'nonexistent_relation'; perhaps you misspelled it?", includes_error.message)
 
-    eager_load_error = assert_raises(SecondaryActiveRecord::ConfigurationError) {
+    eager_load_error = assert_raises(ActiveRecord::ConfigurationError) {
       Post.eager_load(:nonexistent_relation).where(nonexistent_relation: { name: "Rochester" }).find(1)
     }
     assert_equal("Can't join 'Post' to association named 'nonexistent_relation'; perhaps you misspelled it?", eager_load_error.message)
 
-    includes_and_eager_load_error = assert_raises(SecondaryActiveRecord::ConfigurationError) {
+    includes_and_eager_load_error = assert_raises(ActiveRecord::ConfigurationError) {
       Post.eager_load(:nonexistent_relation).includes(:nonexistent_relation).where(nonexistent_relation: { name: "Rochester" }).find(1)
     }
     assert_equal("Can't join 'Post' to association named 'nonexistent_relation'; perhaps you misspelled it?", includes_and_eager_load_error.message)
@@ -770,9 +781,9 @@ class AssociationsJoinModelTest < SecondaryActiveRecord::TestCase
     def find_post_with_dependency(post_id, association, association_name, dependency)
       class_name = "PostWith#{association.to_s.classify}#{dependency.to_s.classify}"
       Post.find(post_id).update_columns type: class_name
-      klass = Object.const_set(class_name, Class.new(SecondaryActiveRecord::Base))
+      klass = Object.const_set(class_name, Class.new(ActiveRecord::Base))
       klass.table_name = "posts"
-      klass.send(association, association_name, as: :taggable, dependent: dependency)
+      klass.public_send(association, association_name, as: :taggable, dependent: dependency)
       klass.find(post_id)
     end
 end

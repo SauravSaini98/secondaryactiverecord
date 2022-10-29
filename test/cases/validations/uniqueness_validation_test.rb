@@ -12,7 +12,7 @@ require "models/author"
 require "models/person"
 require "models/essay"
 
-class Wizard < SecondaryActiveRecord::Base
+class Wizard < ActiveRecord::Base
   self.abstract_class = true
 
   validates_uniqueness_of :name
@@ -41,13 +41,13 @@ class TopicWithUniqEvent < Topic
   validates :event, uniqueness: true
 end
 
-class BigIntTest < SecondaryActiveRecord::Base
+class BigIntTest < ActiveRecord::Base
   INT_MAX_VALUE = 2147483647
   self.table_name = "cars"
   validates :engines_count, uniqueness: true, inclusion: { in: 0..INT_MAX_VALUE }
 end
 
-class BigIntReverseTest < SecondaryActiveRecord::Base
+class BigIntReverseTest < ActiveRecord::Base
   INT_MAX_VALUE = 2147483647
   self.table_name = "cars"
   validates :engines_count, inclusion: { in: 0..INT_MAX_VALUE }
@@ -62,11 +62,11 @@ class TopicWithAfterCreate < Topic
   after_create :set_author
 
   def set_author
-    update_attributes!(author_name: "#{title} #{id}")
+    update!(author_name: "#{title} #{id}")
   end
 end
 
-class UniquenessValidationTest < SecondaryActiveRecord::TestCase
+class UniquenessValidationTest < ActiveRecord::TestCase
   INT_MAX_VALUE = 2147483647
 
   fixtures :topics, "warehouse-things"
@@ -83,8 +83,8 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert t.save, "Should still save t as unique"
 
     t2 = Topic.new("title" => "I'm uniqué!")
-    assert !t2.valid?, "Shouldn't be valid"
-    assert !t2.save, "Shouldn't save t2 as unique"
+    assert_not t2.valid?, "Shouldn't be valid"
+    assert_not t2.save, "Shouldn't save t2 as unique"
     assert_equal ["has already been taken"], t2.errors[:title]
 
     t2.title = "Now I am really also unique"
@@ -106,8 +106,8 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert t.save, "Should save t as unique"
 
     t2 = Topic.new("title" => nil)
-    assert !t2.valid?, "Shouldn't be valid"
-    assert !t2.save, "Shouldn't save t2 as unique"
+    assert_not t2.valid?, "Shouldn't be valid"
+    assert_not t2.save, "Shouldn't save t2 as unique"
     assert_equal ["has already been taken"], t2.errors[:title]
   end
 
@@ -146,7 +146,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert r1.valid?, "Saving r1"
 
     r2 = t.replies.create "title" => "r2", "content" => "hello world"
-    assert !r2.valid?, "Saving r2 first time"
+    assert_not r2.valid?, "Saving r2 first time"
 
     r2.content = "something else"
     assert r2.save, "Saving r2 second time"
@@ -154,6 +154,25 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     t2 = Topic.create("title" => "I'm unique too!")
     r3 = t2.replies.create "title" => "r3", "content" => "hello world"
     assert r3.valid?, "Saving r3"
+  end
+
+  def test_validate_uniqueness_with_aliases
+    Reply.validates_uniqueness_of(:new_content, scope: :new_parent_id)
+
+    t = Topic.create(title: "I'm unique!")
+
+    r1 = t.replies.create(title: "r1", content: "hello world")
+    assert_predicate r1, :valid?, "Saving r1"
+
+    r2 = t.replies.create(title: "r2", content: "hello world")
+    assert_not_predicate r2, :valid?, "Saving r2 first time"
+
+    r2.content = "something else"
+    assert r2.save, "Saving r2 second time"
+
+    t2 = Topic.create("title" => "I'm unique too!")
+    r3 = t2.replies.create(title: "r3", content: "hello world")
+    assert_predicate r3, :valid?, "Saving r3"
   end
 
   def test_validate_uniqueness_with_scope_invalid_syntax
@@ -172,20 +191,22 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert r1.valid?, "Saving r1"
 
     r2 = t.replies.create "title" => "r2", "content" => "hello world"
-    assert !r2.valid?, "Saving r2 first time"
+    assert_not r2.valid?, "Saving r2 first time"
   end
 
   def test_validate_uniqueness_with_polymorphic_object_scope
-    Essay.validates_uniqueness_of(:name, scope: :writer)
+    repair_validations(Essay) do
+      Essay.validates_uniqueness_of(:name, scope: :writer)
 
-    a = Author.create(name: "Sergey")
-    p = Person.create(first_name: "Sergey")
+      a = Author.create(name: "Sergey")
+      p = Person.create(first_name: "Sergey")
 
-    e1 = a.essays.create(name: "Essay")
-    assert e1.valid?, "Saving e1"
+      e1 = a.essays.create(name: "Essay")
+      assert e1.valid?, "Saving e1"
 
-    e2 = p.essays.create(name: "Essay")
-    assert e2.valid?, "Saving e2"
+      e2 = p.essays.create(name: "Essay")
+      assert e2.valid?, "Saving e2"
+    end
   end
 
   def test_validate_uniqueness_with_composed_attribute_scope
@@ -193,7 +214,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert r1.valid?, "Saving r1"
 
     r2 = ReplyWithTitleObject.create "title" => "r1", "content" => "hello world"
-    assert !r2.valid?, "Saving r2 first time"
+    assert_not r2.valid?, "Saving r2 first time"
   end
 
   def test_validate_uniqueness_with_object_arg
@@ -205,7 +226,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert r1.valid?, "Saving r1"
 
     r2 = t.replies.create "title" => "r2", "content" => "hello world"
-    assert !r2.valid?, "Saving r2 first time"
+    assert_not r2.valid?, "Saving r2 first time"
   end
 
   def test_validate_uniqueness_scoped_to_defining_class
@@ -215,7 +236,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert r1.valid?, "Saving r1"
 
     r2 = t.silly_unique_replies.create "title" => "r2", "content" => "a barrel of fun"
-    assert !r2.valid?, "Saving r2"
+    assert_not r2.valid?, "Saving r2"
 
     # Should succeed as validates_uniqueness_of only applies to
     # UniqueReply and its subclasses
@@ -228,23 +249,23 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
 
     t = Topic.create("title" => "The earth is actually flat!")
 
-    r1 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're crazy!", "content" => "Crazy reply"
+    r1 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're joking!", "content" => "Silly reply"
     assert r1.valid?, "Saving r1"
 
-    r2 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're crazy!", "content" => "Crazy reply again..."
-    assert !r2.valid?, "Saving r2. Double reply by same author."
+    r2 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're joking!", "content" => "Silly reply again..."
+    assert_not r2.valid?, "Saving r2. Double reply by same author."
 
     r2.author_email_address = "jeremy_alt_email@rubyonrails.com"
     assert r2.save, "Saving r2 the second time."
 
     r3 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy_alt_email@rubyonrails.com", "title" => "You're wrong", "content" => "It's cubic"
-    assert !r3.valid?, "Saving r3"
+    assert_not r3.valid?, "Saving r3"
 
     r3.author_name = "jj"
     assert r3.save, "Saving r3 the second time."
 
     r3.author_name = "jeremy"
-    assert !r3.save, "Saving r3 the third time."
+    assert_not r3.save, "Saving r3 the third time."
   end
 
   def test_validate_case_insensitive_uniqueness
@@ -257,15 +278,15 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert t.save, "Should still save t as unique"
 
     t2 = Topic.new("title" => "I'm UNIQUE!", :parent_id => 1)
-    assert !t2.valid?, "Shouldn't be valid"
-    assert !t2.save, "Shouldn't save t2 as unique"
+    assert_not t2.valid?, "Shouldn't be valid"
+    assert_not t2.save, "Shouldn't save t2 as unique"
     assert_predicate t2.errors[:title], :any?
     assert_predicate t2.errors[:parent_id], :any?
     assert_equal ["has already been taken"], t2.errors[:title]
 
     t2.title = "I'm truly UNIQUE!"
-    assert !t2.valid?, "Shouldn't be valid"
-    assert !t2.save, "Shouldn't save t2 as unique"
+    assert_not t2.valid?, "Shouldn't be valid"
+    assert_not t2.save, "Shouldn't save t2 as unique"
     assert_empty t2.errors[:title]
     assert_predicate t2.errors[:parent_id], :any?
 
@@ -283,8 +304,8 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     # If database hasn't UTF-8 character set, this test fails
     if Topic.all.merge!(select: "LOWER(title) AS title").find(t_utf8.id).title == "я тоже уникальный!"
       t2_utf8 = Topic.new("title" => "я тоже УНИКАЛЬНЫЙ!")
-      assert !t2_utf8.valid?, "Shouldn't be valid"
-      assert !t2_utf8.save, "Shouldn't save t2_utf8 as unique"
+      assert_not t2_utf8.valid?, "Shouldn't be valid"
+      assert_not t2_utf8.save, "Shouldn't save t2_utf8 as unique"
     end
   end
 
@@ -312,6 +333,31 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
 
     t3 = Topic.new("title" => "I'm uniqu_!")
     assert t3.save, "Should save t3 as unique"
+  end
+
+  def test_validate_uniqueness_by_default_database_collation
+    Topic.validates_uniqueness_of(:author_email_address)
+
+    topic1 = Topic.new(author_email_address: "david@loudthinking.com")
+    topic2 = Topic.new(author_email_address: "David@loudthinking.com")
+
+    assert_equal 1, Topic.where(author_email_address: "david@loudthinking.com").count
+
+    assert_not topic1.valid?
+    assert_not topic1.save
+
+    if current_adapter?(:Mysql2Adapter)
+      # Case insensitive collation (utf8mb4_0900_ai_ci) by default.
+      # Should not allow "David" if "david" exists.
+      assert_not topic2.valid?
+      assert_not topic2.save
+    else
+      assert topic2.valid?
+      assert topic2.save
+    end
+
+    assert_equal 1, Topic.where(author_email_address: "david@loudthinking.com").count
+    assert_equal 1, Topic.where(author_email_address: "David@loudthinking.com").count
   end
 
   def test_validate_case_sensitive_uniqueness
@@ -349,7 +395,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
 
   def test_validate_uniqueness_with_non_standard_table_names
     i1 = WarehouseThing.create(value: 1000)
-    assert !i1.valid?, "i1 should not be valid"
+    assert_not i1.valid?, "i1 should not be valid"
     assert i1.errors[:value].any?, "Should not be empty"
   end
 
@@ -382,11 +428,11 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
       e2 = Event.create(title: "abcdefgh")
       assert_not e2.valid?, "Created an event whose title is not unique"
     elsif current_adapter?(:Mysql2Adapter, :PostgreSQLAdapter, :OracleAdapter, :SQLServerAdapter)
-      assert_raise(SecondaryActiveRecord::ValueTooLong) do
+      assert_raise(ActiveRecord::ValueTooLong) do
         Event.create(title: "abcdefgh")
       end
     else
-      assert_raise(SecondaryActiveRecord::StatementInvalid) do
+      assert_raise(ActiveRecord::StatementInvalid) do
         Event.create(title: "abcdefgh")
       end
     end
@@ -401,11 +447,11 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
       e2 = Event.create(title: "一二三四五六七八")
       assert_not e2.valid?, "Created an event whose title is not unique"
     elsif current_adapter?(:Mysql2Adapter, :PostgreSQLAdapter, :OracleAdapter, :SQLServerAdapter)
-      assert_raise(SecondaryActiveRecord::ValueTooLong) do
+      assert_raise(ActiveRecord::ValueTooLong) do
         Event.create(title: "一二三四五六七八")
       end
     else
-      assert_raise(SecondaryActiveRecord::StatementInvalid) do
+      assert_raise(ActiveRecord::StatementInvalid) do
         Event.create(title: "一二三四五六七八")
       end
     end
@@ -417,12 +463,12 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
 
     # Should use validation from base class (which is abstract)
     w2 = IneptWizard.new(name: "Rincewind", city: "Quirm")
-    assert !w2.valid?, "w2 shouldn't be valid"
+    assert_not w2.valid?, "w2 shouldn't be valid"
     assert w2.errors[:name].any?, "Should have errors for name"
     assert_equal ["has already been taken"], w2.errors[:name], "Should have uniqueness message for name"
 
     w3 = Conjurer.new(name: "Rincewind", city: "Quirm")
-    assert !w3.valid?, "w3 shouldn't be valid"
+    assert_not w3.valid?, "w3 shouldn't be valid"
     assert w3.errors[:name].any?, "Should have errors for name"
     assert_equal ["has already been taken"], w3.errors[:name], "Should have uniqueness message for name"
 
@@ -430,12 +476,12 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert w4.valid?, "Saving w4"
 
     w5 = Thaumaturgist.new(name: "The Amazing Bonko", city: "Lancre")
-    assert !w5.valid?, "w5 shouldn't be valid"
+    assert_not w5.valid?, "w5 shouldn't be valid"
     assert w5.errors[:name].any?, "Should have errors for name"
     assert_equal ["has already been taken"], w5.errors[:name], "Should have uniqueness message for name"
 
     w6 = Thaumaturgist.new(name: "Mustrum Ridcully", city: "Quirm")
-    assert !w6.valid?, "w6 shouldn't be valid"
+    assert_not w6.valid?, "w6 shouldn't be valid"
     assert w6.errors[:city].any?, "Should have errors for city"
     assert_equal ["has already been taken"], w6.errors[:city], "Should have uniqueness message for city"
   end
@@ -446,7 +492,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     Topic.create("title" => "I'm an unapproved topic", "approved" => false)
 
     t3 = Topic.new("title" => "I'm a topic", "approved" => true)
-    assert !t3.valid?, "t3 shouldn't be valid"
+    assert_not t3.valid?, "t3 shouldn't be valid"
 
     t4 = Topic.new("title" => "I'm an unapproved topic", "approved" => false)
     assert t4.valid?, "t4 should be valid"
@@ -456,6 +502,23 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
     assert_raises(ArgumentError) {
       Topic.validates_uniqueness_of :title, conditions: Topic.where(approved: true)
     }
+  end
+
+  def test_validate_uniqueness_with_conditions_with_record_arg
+    Topic.validates_uniqueness_of :title, conditions: ->(record) {
+      where(written_on: record.written_on.beginning_of_day..record.written_on.end_of_day)
+    }
+
+    today_midday = Time.current.midday
+
+    todays_topic = Topic.new(title: "Highlights of the Day", written_on: today_midday)
+    assert todays_topic.save, "1st topic written today with this title should save"
+
+    todays_topic_duplicate = Topic.new(title: "Highlights of the Day", written_on: today_midday + 1.minute)
+    assert todays_topic_duplicate.invalid?, "2nd topic written today with this title should be invalid"
+
+    tomorrows_topic = Topic.new(title: "Highlights of the Day", written_on: today_midday + 1.day)
+    assert tomorrows_topic.valid?, "1st topic written tomorrow with this title should be valid"
   end
 
   def test_validate_uniqueness_on_existing_relation
@@ -473,7 +536,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
   end
 
   def test_validate_uniqueness_of_custom_primary_key
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "keyboards"
       self.primary_key = :key_number
 
@@ -492,7 +555,7 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
   end
 
   def test_validate_uniqueness_without_primary_key
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "dashboards"
 
       validates_uniqueness_of :dashboard_id
@@ -506,11 +569,11 @@ class UniquenessValidationTest < SecondaryActiveRecord::TestCase
 
     abc.dashboard_id = "def"
 
-    e = assert_raises SecondaryActiveRecord::UnknownPrimaryKey do
+    e = assert_raises ActiveRecord::UnknownPrimaryKey do
       abc.save!
     end
     assert_match(/\AUnknown primary key for table dashboards in model/, e.message)
-    assert_match(/Can not validate uniqueness for persisted record without primary key.\z/, e.message)
+    assert_match(/Cannot validate uniqueness for persisted record without primary key.\z/, e.message)
   end
 
   def test_validate_uniqueness_ignores_itself_when_primary_key_changed

@@ -4,7 +4,7 @@ require "cases/helper"
 require "models/owner"
 require "models/pet"
 
-class ReloadModelsTest < SecondaryActiveRecord::TestCase
+class ReloadModelsTest < ActiveRecord::TestCase
   include ActiveSupport::Testing::Isolation
 
   fixtures :pets, :owners

@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class Dashboard < SecondaryActiveRecord::Base
+class Dashboard < ActiveRecord::Base
   self.primary_key = :dashboard_id
 end

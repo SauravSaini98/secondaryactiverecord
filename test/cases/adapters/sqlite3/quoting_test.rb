@@ -4,14 +4,10 @@ require "cases/helper"
 require "bigdecimal"
 require "securerandom"
 
-class SQLite3QuotingTest < SecondaryActiveRecord::SQLite3TestCase
+class SQLite3QuotingTest < ActiveRecord::SQLite3TestCase
   def setup
-    @conn = SecondaryActiveRecord::Base.connection
-    @initial_represent_boolean_as_integer = SecondaryActiveRecord::ConnectionAdapters::SQLite3Adapter.represent_boolean_as_integer
-  end
-
-  def teardown
-    SecondaryActiveRecord::ConnectionAdapters::SQLite3Adapter.represent_boolean_as_integer = @initial_represent_boolean_as_integer
+    super
+    @conn = ActiveRecord::Base.connection
   end
 
   def test_type_cast_binary_encoding_without_logger
@@ -22,18 +18,10 @@ class SQLite3QuotingTest < SecondaryActiveRecord::SQLite3TestCase
   end
 
   def test_type_cast_true
-    SecondaryActiveRecord::ConnectionAdapters::SQLite3Adapter.represent_boolean_as_integer = false
-    assert_equal "t", @conn.type_cast(true)
-
-    SecondaryActiveRecord::ConnectionAdapters::SQLite3Adapter.represent_boolean_as_integer = true
     assert_equal 1, @conn.type_cast(true)
   end
 
   def test_type_cast_false
-    SecondaryActiveRecord::ConnectionAdapters::SQLite3Adapter.represent_boolean_as_integer = false
-    assert_equal "f", @conn.type_cast(false)
-
-    SecondaryActiveRecord::ConnectionAdapters::SQLite3Adapter.represent_boolean_as_integer = true
     assert_equal 0, @conn.type_cast(false)
   end
 
@@ -44,21 +32,21 @@ class SQLite3QuotingTest < SecondaryActiveRecord::SQLite3TestCase
 
   def test_quoting_binary_strings
     value = "hello".encode("ascii-8bit")
-    type = SecondaryActiveRecord::Type::String.new
+    type = ActiveRecord::Type::String.new
 
     assert_equal "'hello'", @conn.quote(type.serialize(value))
   end
 
   def test_quoted_time_returns_date_qualified_time
     value = ::Time.utc(2000, 1, 1, 12, 30, 0, 999999)
-    type = SecondaryActiveRecord::Type::Time.new
+    type = ActiveRecord::Type::Time.new
 
     assert_equal "'2000-01-01 12:30:00.999999'", @conn.quote(type.serialize(value))
   end
 
   def test_quoted_time_normalizes_date_qualified_time
     value = ::Time.utc(2018, 3, 11, 12, 30, 0, 999999)
-    type = SecondaryActiveRecord::Type::Time.new
+    type = ActiveRecord::Type::Time.new
 
     assert_equal "'2000-01-01 12:30:00.999999'", @conn.quote(type.serialize(value))
   end
@@ -69,7 +57,7 @@ class SQLite3QuotingTest < SecondaryActiveRecord::SQLite3TestCase
         t = Time.new(2000, 7, 1, 0, 0, 0, "+04:30")
 
         expected = t.change(year: 2000, month: 1, day: 1)
-        expected = expected.getutc.to_s(:sec_db).sub(/\A\d\d\d\d-\d\d-\d\d /, "2000-01-01 ")
+        expected = expected.getutc.to_fs(:db).sub(/\A\d\d\d\d-\d\d-\d\d /, "2000-01-01 ")
 
         assert_equal expected, @conn.quoted_time(t)
       end
@@ -82,7 +70,7 @@ class SQLite3QuotingTest < SecondaryActiveRecord::SQLite3TestCase
         t = Time.new(2000, 7, 1, 0, 0, 0, "+04:30")
 
         expected = t.change(year: 2000, month: 1, day: 1)
-        expected = expected.getlocal.to_s(:sec_db).sub(/\A\d\d\d\d-\d\d-\d\d /, "2000-01-01 ")
+        expected = expected.getlocal.to_fs(:db).sub(/\A\d\d\d\d-\d\d-\d\d /, "2000-01-01 ")
 
         assert_equal expected, @conn.quoted_time(t)
       end

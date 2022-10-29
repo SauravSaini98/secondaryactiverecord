@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 require "cases/helper"
-require "secondary_active_record/connection_adapters/postgresql/utils"
+require "active_record/connection_adapters/postgresql/utils"
 
-class PostgreSQLUtilsTest < SecondaryActiveRecord::PostgreSQLTestCase
-  Name = SecondaryActiveRecord::ConnectionAdapters::PostgreSQL::Name
-  include SecondaryActiveRecord::ConnectionAdapters::PostgreSQL::Utils
+class PostgreSQLUtilsTest < ActiveRecord::PostgreSQLTestCase
+  Name = ActiveRecord::ConnectionAdapters::PostgreSQL::Name
+  include ActiveRecord::ConnectionAdapters::PostgreSQL::Utils
 
   def test_extract_schema_qualified_name
     {
@@ -23,8 +23,8 @@ class PostgreSQLUtilsTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 end
 
-class PostgreSQLNameTest < SecondaryActiveRecord::PostgreSQLTestCase
-  Name = SecondaryActiveRecord::ConnectionAdapters::PostgreSQL::Name
+class PostgreSQLNameTest < ActiveRecord::PostgreSQLTestCase
+  Name = ActiveRecord::ConnectionAdapters::PostgreSQL::Name
 
   test "represents itself as schema.name" do
     obj = Name.new("public", "articles")

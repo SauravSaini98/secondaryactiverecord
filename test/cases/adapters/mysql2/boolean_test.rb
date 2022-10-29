@@ -2,15 +2,15 @@
 
 require "cases/helper"
 
-class Mysql2BooleanTest < SecondaryActiveRecord::Mysql2TestCase
+class Mysql2BooleanTest < ActiveRecord::Mysql2TestCase
   self.use_transactional_tests = false
 
-  class BooleanType < SecondaryActiveRecord::Base
+  class BooleanType < ActiveRecord::Base
     self.table_name = "mysql_booleans"
   end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.clear_cache!
     @connection.create_table("mysql_booleans") do |t|
       t.boolean "archived"
@@ -18,7 +18,7 @@ class Mysql2BooleanTest < SecondaryActiveRecord::Mysql2TestCase
     end
     BooleanType.reset_column_information
 
-    @emulate_booleans = SecondaryActiveRecord::ConnectionAdapters::Mysql2Adapter.emulate_booleans
+    @emulate_booleans = ActiveRecord::ConnectionAdapters::Mysql2Adapter.emulate_booleans
   end
 
   teardown do
@@ -96,7 +96,7 @@ class Mysql2BooleanTest < SecondaryActiveRecord::Mysql2TestCase
   end
 
   def emulate_booleans(value)
-    SecondaryActiveRecord::ConnectionAdapters::Mysql2Adapter.emulate_booleans = value
+    ActiveRecord::ConnectionAdapters::Mysql2Adapter.emulate_booleans = value
     BooleanType.reset_column_information
   end
 end

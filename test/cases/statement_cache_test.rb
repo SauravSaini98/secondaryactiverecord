@@ -4,12 +4,13 @@ require "cases/helper"
 require "models/book"
 require "models/liquid"
 require "models/molecule"
+require "models/numeric_data"
 require "models/electron"
 
-module SecondaryActiveRecord
-  class StatementCacheTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class StatementCacheTest < ActiveRecord::TestCase
     def setup
-      @connection = SecondaryActiveRecord::Base.connection
+      @connection = ActiveRecord::Base.connection
     end
 
     def test_statement_cache
@@ -51,7 +52,7 @@ module SecondaryActiveRecord
     end
 
     def test_statement_cache_with_simple_statement
-      cache = SecondaryActiveRecord::StatementCache.create(Book.connection) do |params|
+      cache = ActiveRecord::StatementCache.create(Book.connection) do |params|
         Book.where(name: "my book").where("author_id > 3")
       end
 
@@ -62,7 +63,7 @@ module SecondaryActiveRecord
     end
 
     def test_statement_cache_with_complex_statement
-      cache = SecondaryActiveRecord::StatementCache.create(Book.connection) do |params|
+      cache = ActiveRecord::StatementCache.create(Book.connection) do |params|
         Liquid.joins(molecules: :electrons).where("molecules.name" => "dioxane", "electrons.name" => "lepton")
       end
 
@@ -74,8 +75,13 @@ module SecondaryActiveRecord
       assert_equal "salty", liquids[0].name
     end
 
+    def test_statement_cache_with_strictly_cast_attribute
+      row = NumericData.create(temperature: 1.5)
+      assert_equal row, NumericData.find_by(temperature: 1.5)
+    end
+
     def test_statement_cache_values_differ
-      cache = SecondaryActiveRecord::StatementCache.create(Book.connection) do |params|
+      cache = ActiveRecord::StatementCache.create(Book.connection) do |params|
         Book.where(name: "my book")
       end
 
@@ -102,7 +108,7 @@ module SecondaryActiveRecord
         Book.find_by(name: "my other book")
       end
 
-      refute_equal book, other_book
+      assert_not_equal book, other_book
     end
 
     def test_find_by_does_not_use_statement_cache_if_table_name_is_changed
@@ -124,11 +130,24 @@ module SecondaryActiveRecord
 
       # changing the table name should change the query that is not cached.
       Book.table_name = :birds
-      assert_raise SecondaryActiveRecord::RecordNotFound do
+      assert_raise ActiveRecord::RecordNotFound do
         Book.find(book.id)
       end
     ensure
       Book.table_name = :books
+    end
+
+    def test_find_association_does_not_use_statement_cache_if_table_name_is_changed
+      salty = Liquid.create(name: "salty")
+      molecule = salty.molecules.create(name: "dioxane")
+
+      assert_equal salty, molecule.liquid
+
+      Liquid.table_name = :birds
+
+      assert_nil molecule.reload_liquid
+    ensure
+      Liquid.table_name = :liquid
     end
   end
 end

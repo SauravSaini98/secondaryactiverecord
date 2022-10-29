@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
 require "cases/helper"
-require "secondary_active_record/explain_subscriber"
-require "secondary_active_record/explain_registry"
+require "active_record/explain_subscriber"
+require "active_record/explain_registry"
 
-if SecondaryActiveRecord::Base.connection.supports_explain?
-  class ExplainSubscriberTest < SecondaryActiveRecord::TestCase
-    SUBSCRIBER = SecondaryActiveRecord::ExplainSubscriber.new
+if ActiveRecord::Base.connection.supports_explain?
+  class ExplainSubscriberTest < ActiveRecord::TestCase
+    SUBSCRIBER = ActiveRecord::ExplainSubscriber.new
 
     def setup
-      SecondaryActiveRecord::ExplainRegistry.reset
-      SecondaryActiveRecord::ExplainRegistry.collect = true
+      ActiveRecord::ExplainRegistry.reset
+      ActiveRecord::ExplainRegistry.collect = true
     end
 
     def test_collects_nothing_if_the_payload_has_an_exception
@@ -19,14 +19,14 @@ if SecondaryActiveRecord::Base.connection.supports_explain?
     end
 
     def test_collects_nothing_for_ignored_payloads
-      SecondaryActiveRecord::ExplainSubscriber::IGNORED_PAYLOADS.each do |ip|
+      ActiveRecord::ExplainSubscriber::IGNORED_PAYLOADS.each do |ip|
         SUBSCRIBER.finish(nil, nil, name: ip)
       end
       assert_empty queries
     end
 
     def test_collects_nothing_if_collect_is_false
-      SecondaryActiveRecord::ExplainRegistry.collect = false
+      ActiveRecord::ExplainRegistry.collect = false
       SUBSCRIBER.finish(nil, nil, name: "SQL", sql: "select 1 from users", binds: [1, 2])
       assert_empty queries
     end
@@ -40,7 +40,7 @@ if SecondaryActiveRecord::Base.connection.supports_explain?
       assert_equal binds, queries[0][1]
     end
 
-    def test_collects_nothing_if_the_statement_is_not_whitelisted
+    def test_collects_nothing_if_the_statement_is_not_explainable
       SUBSCRIBER.finish(nil, nil, name: "SQL", sql: "SHOW max_identifier_length")
       assert_empty queries
     end
@@ -56,11 +56,11 @@ if SecondaryActiveRecord::Base.connection.supports_explain?
     end
 
     teardown do
-      SecondaryActiveRecord::ExplainRegistry.reset
+      ActiveRecord::ExplainRegistry.reset
     end
 
     def queries
-      SecondaryActiveRecord::ExplainRegistry.queries
+      ActiveRecord::ExplainRegistry.queries
     end
   end
 end

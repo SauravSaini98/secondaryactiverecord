@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class Keyboard < SecondaryActiveRecord::Base
+class Keyboard < ActiveRecord::Base
   self.primary_key = "key_number"
 end

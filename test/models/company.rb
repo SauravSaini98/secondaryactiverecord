@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class AbstractCompany < SecondaryActiveRecord::Base
+class AbstractCompany < ActiveRecord::Base
   self.abstract_class = true
 end
 
@@ -9,13 +9,19 @@ class Company < AbstractCompany
 
   validates_presence_of :name
 
+  has_one :account, foreign_key: "firm_id"
   has_one :dummy_account, foreign_key: "firm_id", class_name: "Account"
   has_many :contracts
   has_many :developers, through: :contracts
+  has_many :special_contracts, -> { includes(:special_developer).where.not("developers.id": nil) }
+  has_many :special_developers, through: :special_contracts
+  has_many :comments, foreign_key: "company"
+
+  alias_attribute :new_name, :name
+  attribute :metadata, :json
 
   scope :of_first_firm, lambda {
-    joins(account: :firm).
-    where("firms.id" => 1)
+    joins(account: :firm).where("companies.id": 1)
   }
 
   def arbitrary_method
@@ -23,7 +29,6 @@ class Company < AbstractCompany
   end
 
   private
-
     def private_method
       "I am Jack's innermost fears and aspirations"
     end
@@ -107,7 +112,7 @@ class Firm < Company
 end
 
 class DependentFirm < Company
-  has_one :account, foreign_key: "firm_id", dependent: :nullify
+  has_one :account, -> { order(:id) }, foreign_key: "firm_id", dependent: :nullify
   has_many :companies, foreign_key: "client_of", dependent: :nullify
   has_one :company, foreign_key: "client_of", dependent: :nullify
 end
@@ -120,6 +125,12 @@ end
 class RestrictedWithErrorFirm < Company
   has_one :account, -> { order("id") }, foreign_key: "firm_id", dependent: :restrict_with_error
   has_many :companies, -> { order("id") }, foreign_key: "client_of", dependent: :restrict_with_error
+end
+
+class Agency < Firm
+  has_many :projects, foreign_key: :firm_id
+
+  accepts_nested_attributes_for :projects
 end
 
 class Client < Company
@@ -152,7 +163,7 @@ class Client < Company
 
   attr_accessor :rollback_on_save
   after_save do
-    raise SecondaryActiveRecord::Rollback if rollback_on_save
+    raise ActiveRecord::Rollback if rollback_on_save
   end
 
   attr_accessor :rollback_on_create_called
@@ -202,6 +213,14 @@ class SpecialClient < Client
 end
 
 class VerySpecialClient < SpecialClient
+end
+
+class NewlyContractedCompany < Company
+  has_many :new_contracts, foreign_key: "company_id"
+
+  before_save do
+    self.new_contracts << NewContract.new
+  end
 end
 
 require "models/account"

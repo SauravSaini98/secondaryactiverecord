@@ -3,21 +3,21 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlArrayTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlArrayTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
   include InTimeZone
 
-  class PgArray < SecondaryActiveRecord::Base
+  class PgArray < ActiveRecord::Base
     self.table_name = "pg_arrays"
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
 
     enable_extension!("hstore", @connection)
 
     @connection.transaction do
-      @connection.create_table("pg_arrays") do |t|
+      @connection.create_table "pg_arrays", force: true do |t|
         t.string "tags", array: true, limit: 255
         t.integer "ratings", array: true
         t.datetime :datetimes, array: true
@@ -51,7 +51,7 @@ class PostgresqlArrayTest < SecondaryActiveRecord::PostgreSQLTestCase
     new_klass = Class.new(PgArray) do
       serialize :tags, Array
     end
-    assert_raises(SecondaryActiveRecord::AttributeMethods::Serialization::ColumnNotSerializableError) do
+    assert_raises(ActiveRecord::AttributeMethods::Serialization::ColumnNotSerializableError) do
       new_klass.new
     end
   end
@@ -112,9 +112,21 @@ class PostgresqlArrayTest < SecondaryActiveRecord::PostgreSQLTestCase
     assert_predicate column, :array?
   end
 
+  def test_change_column_from_non_array_to_array
+    @connection.add_column :pg_arrays, :snippets, :string
+    @connection.change_column :pg_arrays, :snippets, :text, array: true, default: [], using: "string_to_array(\"snippets\", ',')"
+
+    PgArray.reset_column_information
+    column = PgArray.columns_hash["snippets"]
+
+    assert_equal :text, column.type
+    assert_equal [], PgArray.column_defaults["snippets"]
+    assert_predicate column, :array?
+  end
+
   def test_change_column_cant_make_non_array_column_to_array
     @connection.add_column :pg_arrays, :a_string, :string
-    assert_raises SecondaryActiveRecord::StatementInvalid do
+    assert_raises ActiveRecord::StatementInvalid do
       @connection.transaction do
         @connection.change_column :pg_arrays, :a_string, :string, array: true
       end
@@ -226,14 +238,6 @@ class PostgresqlArrayTest < SecondaryActiveRecord::PostgreSQLTestCase
     assert_equal(PgArray.last.tags, tag_values)
   end
 
-  def test_insert_fixtures
-    tag_values = ["val1", "val2", "val3_with_'_multiple_quote_'_chars"]
-    assert_deprecated do
-      @connection.insert_fixtures([{ "tags" => tag_values }], "pg_arrays")
-    end
-    assert_equal(PgArray.last.tags, tag_values)
-  end
-
   def test_attribute_for_inspect_for_array_field
     record = PgArray.new { |a| a.ratings = (1..10).to_a }
     assert_equal("[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]", record.attribute_for_inspect(:ratings))
@@ -262,9 +266,9 @@ class PostgresqlArrayTest < SecondaryActiveRecord::PostgreSQLTestCase
 
   def test_quoting_non_standard_delimiters
     strings = ["hello,", "world;"]
-    oid = SecondaryActiveRecord::ConnectionAdapters::PostgreSQL::OID
-    comma_delim = oid::Array.new(SecondaryActiveRecord::Type::String.new, ",")
-    semicolon_delim = oid::Array.new(SecondaryActiveRecord::Type::String.new, ";")
+    oid = ActiveRecord::ConnectionAdapters::PostgreSQL::OID
+    comma_delim = oid::Array.new(ActiveRecord::Type::String.new, ",")
+    semicolon_delim = oid::Array.new(ActiveRecord::Type::String.new, ";")
     conn = PgArray.connection
 
     assert_equal %({"hello,",world;}), conn.type_cast(comma_delim.serialize(strings))
@@ -353,7 +357,7 @@ class PostgresqlArrayTest < SecondaryActiveRecord::PostgreSQLTestCase
     assert e1.persisted?, "Saving e1"
 
     e2 = klass.create("tags" => ["black", "blue"])
-    assert !e2.persisted?, "e2 shouldn't be valid"
+    assert_not e2.persisted?, "e2 shouldn't be valid"
     assert e2.errors[:tags].any?, "Should have errors for tags"
     assert_equal ["has already been taken"], e2.errors[:tags], "Should have uniqueness message for tags"
   end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Minivan < SecondaryActiveRecord::Base
+class Minivan < ActiveRecord::Base
   self.primary_key = :minivan_id
 
   belongs_to :speedometer

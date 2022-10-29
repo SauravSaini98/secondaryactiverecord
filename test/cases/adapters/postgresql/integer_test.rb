@@ -3,12 +3,12 @@
 require "cases/helper"
 require "active_support/core_ext/numeric/bytes"
 
-class PostgresqlIntegerTest < SecondaryActiveRecord::PostgreSQLTestCase
-  class PgInteger < SecondaryActiveRecord::Base
+class PostgresqlIntegerTest < ActiveRecord::PostgreSQLTestCase
+  class PgInteger < ActiveRecord::Base
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
 
     @connection.transaction do
       @connection.create_table "pg_integers", force: true do |t|

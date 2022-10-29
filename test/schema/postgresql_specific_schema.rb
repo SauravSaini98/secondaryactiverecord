@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-SecondaryActiveRecord::Schema.define do
-
-  enable_extension!("uuid-ossp", SecondaryActiveRecord::Base.connection)
-  enable_extension!("pgcrypto",  SecondaryActiveRecord::Base.connection) if SecondaryActiveRecord::Base.connection.supports_pgcrypto_uuid?
+ActiveRecord::Schema.define do
+  enable_extension!("uuid-ossp", ActiveRecord::Base.connection)
+  enable_extension!("pgcrypto",  ActiveRecord::Base.connection) if ActiveRecord::Base.connection.supports_pgcrypto_uuid?
 
   uuid_default = connection.supports_pgcrypto_uuid? ? {} : { default: "uuid_generate_v4()" }
 
@@ -21,8 +20,11 @@ SecondaryActiveRecord::Schema.define do
     t.date :modified_date_function, default: -> { "now()" }
     t.date :fixed_date, default: "2004-01-01"
     t.datetime :modified_time, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime :modified_time_without_precision, precision: nil, default: -> { "CURRENT_TIMESTAMP" }
+    t.datetime :modified_time_with_precision_0, precision: 0, default: -> { "CURRENT_TIMESTAMP" }
     t.datetime :modified_time_function, default: -> { "now()" }
     t.datetime :fixed_time, default: "2004-01-01 00:00:00.000000-00"
+    t.timestamptz :fixed_time_with_time_zone, default: "2004-01-01 01:00:00+1"
     t.column :char1, "char(1)", default: "Y"
     t.string :char2, limit: 50, default: "a varchar field"
     t.text :char3, default: "a text field"
@@ -85,7 +87,7 @@ _SQL
       BEFORE INSERT ON postgresql_partitioned_table_parent
       FOR EACH ROW EXECUTE PROCEDURE partitioned_insert_trigger();
 _SQL
-  rescue SecondaryActiveRecord::StatementInvalid => e
+  rescue ActiveRecord::StatementInvalid => e
     if e.message.include?('language "plpgsql" does not exist')
       execute "CREATE LANGUAGE 'plpgsql';"
       retry
@@ -105,8 +107,38 @@ _SQL
     t.decimal :decimal_array_default, array: true, default: [1.23, 3.45]
   end
 
+  create_table :uuid_comments, force: true, id: false do |t|
+    t.uuid :uuid, primary_key: true, **uuid_default
+    t.string :content
+  end
+
+  create_table :uuid_entries, force: true, id: false do |t|
+    t.uuid :uuid, primary_key: true, **uuid_default
+    t.string :entryable_type, null: false
+    t.uuid :entryable_uuid, null: false
+  end
+
   create_table :uuid_items, force: true, id: false do |t|
     t.uuid :uuid, primary_key: true, **uuid_default
     t.string :title
+  end
+
+  create_table :uuid_messages, force: true, id: false do |t|
+    t.uuid :uuid, primary_key: true, **uuid_default
+    t.string :subject
+  end
+
+  if supports_partitioned_indexes?
+    create_table(:measurements, id: false, force: true, options: "PARTITION BY LIST (city_id)") do |t|
+      t.string :city_id, null: false
+      t.date :logdate, null: false
+      t.integer :peaktemp
+      t.integer :unitsales
+      t.index [:logdate, :city_id], unique: true
+    end
+    create_table(:measurements_toronto, id: false, force: true,
+                                        options: "PARTITION OF measurements FOR VALUES IN (1)")
+    create_table(:measurements_concepcion, id: false, force: true,
+                                           options: "PARTITION OF measurements FOR VALUES IN (2)")
   end
 end

@@ -3,19 +3,19 @@
 require "cases/helper"
 require "models/topic"
 
-class FinderRespondToTest < SecondaryActiveRecord::TestCase
+class FinderRespondToTest < ActiveRecord::TestCase
   fixtures :topics
 
   def test_should_preserve_normal_respond_to_behaviour_on_base
-    assert_respond_to SecondaryActiveRecord::Base, :new
-    assert_not_respond_to SecondaryActiveRecord::Base, :find_by_something
+    assert_respond_to ActiveRecord::Base, :new
+    assert_not_respond_to ActiveRecord::Base, :find_by_something
   end
 
   def test_should_preserve_normal_respond_to_behaviour_and_respond_to_newly_added_method
-    class << Topic; self; end.send(:define_method, :method_added_for_finder_respond_to_test) {}
+    Topic.singleton_class.define_method(:method_added_for_finder_respond_to_test) { }
     assert_respond_to Topic, :method_added_for_finder_respond_to_test
   ensure
-    class << Topic; self; end.send(:remove_method, :method_added_for_finder_respond_to_test)
+    Topic.singleton_class.remove_method :method_added_for_finder_respond_to_test
   end
 
   def test_should_preserve_normal_respond_to_behaviour_and_respond_to_standard_object_method
@@ -54,8 +54,7 @@ class FinderRespondToTest < SecondaryActiveRecord::TestCase
   end
 
   private
-
     def ensure_topic_method_is_not_cached(method_id)
-      class << Topic; self; end.send(:remove_method, method_id) if Topic.public_methods.include? method_id
+      Topic.singleton_class.remove_method method_id if Topic.public_methods.include? method_id
     end
 end

@@ -17,9 +17,9 @@ require "models/wheel"
 require "models/treasure"
 require "models/frog"
 
-class LockWithoutDefault < SecondaryActiveRecord::Base; end
+class LockWithoutDefault < ActiveRecord::Base; end
 
-class LockWithCustomColumnWithoutDefault < SecondaryActiveRecord::Base
+class LockWithCustomColumnWithoutDefault < ActiveRecord::Base
   self.table_name = :lock_without_defaults_cust
   column_defaults # to test @column_defaults caching.
   self.locking_column = :custom_lock_version
@@ -29,7 +29,7 @@ class ReadonlyNameShip < Ship
   attr_readonly :name
 end
 
-class OptimisticLockingTest < SecondaryActiveRecord::TestCase
+class OptimisticLockingTest < ActiveRecord::TestCase
   fixtures :people, :legacy_things, :references, :string_key_objects, :peoples_treasures
 
   def test_quote_value_passed_lock_col
@@ -54,7 +54,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 0, s2.lock_version
 
     s2.name = "doubly updated record"
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { s2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { s2.save! }
   end
 
   def test_non_integer_lock_destroy
@@ -67,12 +67,12 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     s1.save!
     assert_equal 1, s1.lock_version
     assert_equal 0, s2.lock_version
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { s2.destroy }
+    assert_raise(ActiveRecord::StaleObjectError) { s2.destroy }
 
     assert s1.destroy
     assert_predicate s1, :frozen?
     assert_predicate s1, :destroyed?
-    assert_raises(SecondaryActiveRecord::RecordNotFound) { StringKeyObject.find("record1") }
+    assert_raises(ActiveRecord::RecordNotFound) { StringKeyObject.find("record1") }
   end
 
   def test_lock_existing
@@ -87,7 +87,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 0, p2.lock_version
 
     p2.first_name = "sue"
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { p2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { p2.save! }
   end
 
   # See Lighthouse ticket #1966
@@ -102,12 +102,12 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 1, p1.lock_version
     assert_equal 0, p2.lock_version
 
-    assert_raises(SecondaryActiveRecord::StaleObjectError) { p2.destroy }
+    assert_raises(ActiveRecord::StaleObjectError) { p2.destroy }
 
     assert p1.destroy
     assert_predicate p1, :frozen?
     assert_predicate p1, :destroyed?
-    assert_raises(SecondaryActiveRecord::RecordNotFound) { Person.find(1) }
+    assert_raises(ActiveRecord::RecordNotFound) { Person.find(1) }
   end
 
   def test_lock_repeating
@@ -122,9 +122,9 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 0, p2.lock_version
 
     p2.first_name = "sue"
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { p2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { p2.save! }
     p2.first_name = "sue2"
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { p2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { p2.save! }
   end
 
   def test_lock_new
@@ -143,7 +143,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 0, p2.lock_version
 
     p2.first_name = "sue"
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { p2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { p2.save! }
   end
 
   def test_lock_exception_record
@@ -160,8 +160,8 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     p1.save!
 
     p2.first_name = "sue"
-    error = assert_raise(SecondaryActiveRecord::StaleObjectError) { p2.save! }
-    assert_equal(error.record.object_id, p2.object_id)
+    error = assert_raise(ActiveRecord::StaleObjectError) { p2.save! }
+    assert_same error.record, p2
   end
 
   def test_lock_new_when_explicitly_passing_nil
@@ -180,9 +180,13 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     p1 = Person.find(1)
     assert_equal 0, p1.lock_version
 
+    sleep 1.0 unless supports_datetime_with_precision? # Remove once MySQL 5.5 support is dropped.
     p1.touch
+
     assert_equal 1, p1.lock_version
-    assert_not p1.changed?, "Changes should have been cleared"
+    assert_not_predicate p1, :changed?, "Changes should have been cleared"
+    assert_predicate p1, :saved_changes?
+    assert_equal ["lock_version", "updated_at"], p1.saved_changes.keys.sort
   end
 
   def test_touch_stale_object
@@ -190,13 +194,15 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     stale_person = Person.find(person.id)
     person.update_attribute(:gender, "M")
 
-    assert_raises(SecondaryActiveRecord::StaleObjectError) do
+    assert_raises(ActiveRecord::StaleObjectError) do
       stale_person.touch
     end
+
+    assert_not_predicate stale_person, :saved_changes?
   end
 
   def test_update_with_dirty_primary_key
-    assert_raises(SecondaryActiveRecord::RecordNotUnique) do
+    assert_raises(ActiveRecord::RecordNotUnique) do
       person = Person.find(1)
       person.id = 2
       person.save!
@@ -207,7 +213,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     person.save!
 
     assert Person.find(42)
-    assert_raises(SecondaryActiveRecord::RecordNotFound) do
+    assert_raises(ActiveRecord::RecordNotFound) do
       Person.find(1)
     end
   end
@@ -218,7 +224,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     person.delete
 
     assert Person.find(2)
-    assert_raises(SecondaryActiveRecord::RecordNotFound) do
+    assert_raises(ActiveRecord::RecordNotFound) do
       Person.find(1)
     end
   end
@@ -229,7 +235,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     person.destroy
 
     assert Person.find(2)
-    assert_raises(SecondaryActiveRecord::RecordNotFound) do
+    assert_raises(ActiveRecord::RecordNotFound) do
       Person.find(1)
     end
   end
@@ -237,7 +243,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
   def test_explicit_update_lock_column_raise_error
     person = Person.find(1)
 
-    assert_raises(SecondaryActiveRecord::StaleObjectError) do
+    assert_raises(ActiveRecord::StaleObjectError) do
       person.first_name = "Douglas Adams"
       person.lock_version = 42
 
@@ -259,7 +265,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 0, t2.version
 
     t2.tps_report_number = 800
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { t2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { t2.save! }
   end
 
   def test_lock_column_is_mass_assignable
@@ -287,15 +293,19 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
   end
 
   def test_touch_existing_lock_without_default_should_work_with_null_in_the_database
-    SecondaryActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
+    ActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
     t1 = LockWithoutDefault.last
 
     assert_equal 0, t1.lock_version
     assert_nil t1.lock_version_before_type_cast
 
+    sleep 1.0 unless supports_datetime_with_precision? # Remove once MySQL 5.5 support is dropped.
     t1.touch
 
     assert_equal 1, t1.lock_version
+    assert_not_predicate t1, :changed?
+    assert_predicate t1, :saved_changes?
+    assert_equal ["lock_version", "updated_at"], t1.saved_changes.keys.sort
   end
 
   def test_touch_stale_object_with_lock_without_default
@@ -304,13 +314,15 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
 
     t1.update!(title: "title2")
 
-    assert_raises(SecondaryActiveRecord::StaleObjectError) do
+    assert_raises(ActiveRecord::StaleObjectError) do
       stale_object.touch
     end
+
+    assert_not_predicate stale_object, :saved_changes?
   end
 
   def test_lock_without_default_should_work_with_null_in_the_database
-    SecondaryActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
+    ActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
     t1 = LockWithoutDefault.last
     t2 = LockWithoutDefault.find(t1.id)
 
@@ -326,9 +338,42 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 1, t1.lock_version
     assert_equal "new title1", t1.title
 
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { t2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { t2.save! }
     assert_equal 0, t2.lock_version
     assert_equal "new title2", t2.title
+  end
+
+  def test_update_with_lock_version_without_default_should_work_on_dirty_value_before_type_cast
+    ActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
+    t1 = LockWithoutDefault.last
+
+    assert_equal 0, t1.lock_version
+    assert_nil t1.lock_version_before_type_cast
+
+    t1.lock_version = t1.lock_version
+
+    assert_equal 0, t1.lock_version
+    assert_equal 0, t1.lock_version_before_type_cast
+
+    assert_nothing_raised { t1.update!(title: "new title1") }
+    assert_equal 1, t1.lock_version
+    assert_equal "new title1", t1.title
+  end
+
+  def test_destroy_with_lock_version_without_default_should_work_on_dirty_value_before_type_cast
+    ActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
+    t1 = LockWithoutDefault.last
+
+    assert_equal 0, t1.lock_version
+    assert_nil t1.lock_version_before_type_cast
+
+    t1.lock_version = t1.lock_version
+
+    assert_equal 0, t1.lock_version
+    assert_equal 0, t1.lock_version_before_type_cast
+
+    assert_nothing_raised { t1.destroy! }
+    assert_predicate t1, :destroyed?
   end
 
   def test_lock_without_default_queries_count
@@ -366,7 +411,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
   end
 
   def test_lock_with_custom_column_without_default_should_work_with_null_in_the_database
-    SecondaryActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults_cust(title) VALUES('title1')")
+    ActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults_cust(title) VALUES('title1')")
 
     t1 = LockWithCustomColumnWithoutDefault.last
     t2 = LockWithCustomColumnWithoutDefault.find(t1.id)
@@ -383,7 +428,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 1, t1.custom_lock_version
     assert_equal "new title1", t1.title
 
-    assert_raise(SecondaryActiveRecord::StaleObjectError) { t2.save! }
+    assert_raise(ActiveRecord::StaleObjectError) { t2.save! }
     assert_equal 0, t2.custom_lock_version
     assert_equal "new title2", t2.title
   end
@@ -423,7 +468,7 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
 
   def test_quote_table_name
     ref = references(:michael_magician)
-    ref.favourite = !ref.favourite
+    ref.favorite = !ref.favorite
     assert ref.save
   end
 
@@ -477,6 +522,12 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
     assert_equal 3, car.lock_version
     assert_operator previously_updated_at, :<, car.updated_at
     assert_operator previously_wheels_owned_at, :<, car.wheels_owned_at
+
+    car.wheels << Wheel.create!
+    assert_equal 1, car.wheels_count
+    assert_equal 4, car.lock_version
+    assert_not car.lock_version_changed?
+    assert_nothing_raised { car.update(name: "herbie") }
   end
 
   def test_polymorphic_destroy_with_dependencies_and_lock_version
@@ -502,13 +553,14 @@ class OptimisticLockingTest < SecondaryActiveRecord::TestCase
 
   def test_yaml_dumping_with_lock_column
     t1 = LockWithoutDefault.new
-    t2 = YAML.load(YAML.dump(t1))
+    payload = YAML.dump(t1)
+    t2 = YAML.respond_to?(:unsafe_load) ? YAML.unsafe_load(payload) : YAML.load(payload)
 
     assert_equal t1.attributes, t2.attributes
   end
 end
 
-class OptimisticLockingWithSchemaChangeTest < SecondaryActiveRecord::TestCase
+class OptimisticLockingWithSchemaChangeTest < ActiveRecord::TestCase
   fixtures :people, :legacy_things, :references
 
   # need to disable transactional tests, because otherwise the sqlite3
@@ -551,15 +603,15 @@ class OptimisticLockingWithSchemaChangeTest < SecondaryActiveRecord::TestCase
     assert_equal 1, p1.personal_legacy_things_count
     assert p1.destroy
     assert_equal true, p1.frozen?
-    assert_raises(SecondaryActiveRecord::RecordNotFound) { Person.find(p1.id) }
-    assert_raises(SecondaryActiveRecord::RecordNotFound) { PersonalLegacyThing.find(t.id) }
+    assert_raises(ActiveRecord::RecordNotFound) { Person.find(p1.id) }
+    assert_raises(ActiveRecord::RecordNotFound) { PersonalLegacyThing.find(t.id) }
   ensure
     remove_counter_column_from(Person, "personal_legacy_things_count")
     PersonalLegacyThing.reset_column_information
   end
 
   def test_destroy_existing_object_with_locking_column_value_null_in_the_database
-    SecondaryActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
+    ActiveRecord::Base.connection.execute("INSERT INTO lock_without_defaults(title) VALUES('title1')")
     t1 = LockWithoutDefault.last
 
     assert_equal 0, t1.lock_version
@@ -576,7 +628,7 @@ class OptimisticLockingWithSchemaChangeTest < SecondaryActiveRecord::TestCase
 
     t1.update!(title: "title2")
 
-    assert_raises(SecondaryActiveRecord::StaleObjectError) do
+    assert_raises(ActiveRecord::StaleObjectError) do
       stale_object.destroy!
     end
 
@@ -584,7 +636,6 @@ class OptimisticLockingWithSchemaChangeTest < SecondaryActiveRecord::TestCase
   end
 
   private
-
     def add_counter_column_to(model, col = "test_count")
       model.connection.add_column model.table_name, col, :integer, null: false, default: 0
       model.reset_column_information
@@ -599,11 +650,11 @@ class OptimisticLockingWithSchemaChangeTest < SecondaryActiveRecord::TestCase
       add_counter_column_to(model)
       object = model.first
       assert_equal 0, object.test_count
-      assert_equal 0, object.send(model.locking_column)
+      assert_equal 0, object.public_send(model.locking_column)
       yield object.id
       object.reload
       assert_equal expected_count, object.test_count
-      assert_equal 1, object.send(model.locking_column)
+      assert_equal 1, object.public_send(model.locking_column)
     ensure
       remove_counter_column_from(model)
     end
@@ -614,7 +665,7 @@ end
 # blocks, so separate script called by Kernel#system is needed.
 # (See exec vs. async_exec in the PostgreSQL adapter.)
 unless in_memory_db?
-  class PessimisticLockingTest < SecondaryActiveRecord::TestCase
+  class PessimisticLockingTest < ActiveRecord::TestCase
     self.use_transactional_tests = false
     fixtures :people, :readers
 
@@ -625,7 +676,7 @@ unless in_memory_db?
     end
 
     # Test typical find.
-    def test_sane_find_with_lock
+    def test_typical_find_with_lock
       assert_nothing_raised do
         Person.transaction do
           Person.lock.find(1)
@@ -690,12 +741,41 @@ unless in_memory_db?
       assert_equal old, person.reload.first_name
     end
 
+    def test_with_lock_configures_transaction
+      person = Person.find 1
+      Person.transaction do
+        outer_transaction = Person.connection.transaction_manager.current_transaction
+        assert_equal true, outer_transaction.joinable?
+        person.with_lock(requires_new: true, joinable: false) do
+          current_transaction = Person.connection.transaction_manager.current_transaction
+          assert_not_equal outer_transaction, current_transaction
+          assert_equal false, current_transaction.joinable?
+        end
+      end
+    end
+
     if current_adapter?(:PostgreSQLAdapter)
       def test_lock_sending_custom_lock_statement
         Person.transaction do
           person = Person.find(1)
           assert_sql(/LIMIT \$?\d FOR SHARE NOWAIT/) do
             person.lock!("FOR SHARE NOWAIT")
+          end
+        end
+      end
+
+      def test_with_lock_sets_isolation
+        person = Person.find 1
+        person.with_lock(isolation: :read_uncommitted) do
+          current_transaction = Person.connection.transaction_manager.current_transaction
+          assert_equal :read_uncommitted, current_transaction.isolation_level
+        end
+      end
+
+      def test_with_lock_locks_with_no_args
+        person = Person.find 1
+        assert_sql(/LIMIT \$?\d FOR UPDATE/i) do
+          person.with_lock do
           end
         end
       end
@@ -707,7 +787,7 @@ unless in_memory_db?
     end
 
     private
-      def duel(zzz = 5)
+      def duel(zzz = 5, &block)
         t0, t1, t2, t3 = nil, nil, nil, nil
 
         a = Thread.new do
@@ -722,7 +802,7 @@ unless in_memory_db?
         b = Thread.new do
           sleep zzz / 2.0   # ensure thread 1 tx starts first
           t2 = Time.now
-          Person.transaction { yield }
+          Person.transaction(&block)
           t3 = Time.now
         end
 

@@ -10,7 +10,7 @@ require "models/toy"
 require "models/car"
 require "models/task"
 
-class TimestampTest < SecondaryActiveRecord::TestCase
+class TimestampTest < ActiveRecord::TestCase
   fixtures :developers, :owners, :pets, :toys, :cars, :tasks
 
   def setup
@@ -34,23 +34,35 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_touching_a_record_updates_its_timestamp
+    sleep 1.0 unless supports_datetime_with_precision? # Remove once MySQL 5.5 support is dropped.
+
     previous_salary = @developer.salary
     @developer.salary = previous_salary + 10000
     @developer.touch
 
     assert_not_equal @previously_updated_at, @developer.updated_at
     assert_equal previous_salary + 10000, @developer.salary
-    assert @developer.salary_changed?, "developer salary should have changed"
-    assert @developer.changed?, "developer should be marked as changed"
+    assert_predicate @developer, :salary_changed?, "developer salary should have changed"
+    assert_predicate @developer, :changed?, "developer should be marked as changed"
+    assert_equal ["salary"], @developer.changed
+    assert_predicate @developer, :saved_changes?
+    assert_equal ["legacy_updated_at", "legacy_updated_on"], @developer.saved_changes.keys.sort
+
     @developer.reload
     assert_equal previous_salary, @developer.salary
   end
 
   def test_touching_a_record_with_default_scope_that_excludes_it_updates_its_timestamp
-    developer = @developer.becomes(DeveloperCalledJamis)
+    sleep 1.0 unless supports_datetime_with_precision? # Remove once MySQL 5.5 support is dropped.
 
+    developer = @developer.becomes(DeveloperCalledJamis)
     developer.touch
+
     assert_not_equal @previously_updated_at, developer.updated_at
+    assert_not_predicate developer, :changed?
+    assert_predicate developer, :saved_changes?
+    assert_equal ["legacy_updated_at", "legacy_updated_on"], developer.saved_changes.keys.sort
+
     developer.reload
     assert_not_equal @previously_updated_at, developer.updated_at
   end
@@ -90,8 +102,8 @@ class TimestampTest < SecondaryActiveRecord::TestCase
       @developer.touch(:created_at)
     end
 
-    assert !@developer.created_at_changed?, "created_at should not be changed"
-    assert !@developer.changed?, "record should not be changed"
+    assert_not @developer.created_at_changed?, "created_at should not be changed"
+    assert_not @developer.changed?, "record should not be changed"
     assert_not_equal previously_created_at, @developer.created_at
     assert_not_equal @previously_updated_at, @developer.updated_at
   end
@@ -171,7 +183,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_global_no_touching
-    SecondaryActiveRecord::Base.no_touching do
+    ActiveRecord::Base.no_touching do
       assert_predicate @developer, :no_touching?
       assert_predicate @owner, :no_touching?
       @developer.touch
@@ -195,7 +207,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_no_touching_with_callbacks
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "developers"
 
       attr_accessor :after_touch_called
@@ -251,7 +263,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_saving_a_record_with_a_belongs_to_that_specifies_touching_a_specific_attribute_the_parent_should_update_that_attribute
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       def self.name; "Pet"; end
       belongs_to :owner, touch: :happy_at
     end
@@ -267,7 +279,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_touching_a_record_with_a_belongs_to_that_uses_a_counter_cache_should_update_the_parent
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       def self.name; "Pet"; end
       belongs_to :owner, counter_cache: :use_count, touch: true
     end
@@ -286,7 +298,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_touching_a_record_touches_parent_record_and_grandparent_record
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       def self.name; "Toy"; end
       belongs_to :pet, touch: true
     end
@@ -304,11 +316,11 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_touching_a_record_touches_polymorphic_record
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       def self.name; "Toy"; end
     end
 
-    wheel_klass = Class.new(SecondaryActiveRecord::Base) do
+    wheel_klass = Class.new(ActiveRecord::Base) do
       def self.name; "Wheel"; end
       belongs_to :wheelable, polymorphic: true, touch: true
     end
@@ -326,7 +338,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_changing_parent_of_a_record_touches_both_new_and_old_parent_record
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       def self.name; "Toy"; end
       belongs_to :pet, touch: true
     end
@@ -352,11 +364,11 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_changing_parent_of_a_record_touches_both_new_and_old_polymorphic_parent_record_changes_within_same_class
-    car_class = Class.new(SecondaryActiveRecord::Base) do
+    car_class = Class.new(ActiveRecord::Base) do
       def self.name; "Car"; end
     end
 
-    wheel_class = Class.new(SecondaryActiveRecord::Base) do
+    wheel_class = Class.new(ActiveRecord::Base) do
       def self.name; "Wheel"; end
       belongs_to :wheelable, polymorphic: true, touch: true
     end
@@ -379,15 +391,15 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_changing_parent_of_a_record_touches_both_new_and_old_polymorphic_parent_record_changes_with_other_class
-    car_class = Class.new(SecondaryActiveRecord::Base) do
+    car_class = Class.new(ActiveRecord::Base) do
       def self.name; "Car"; end
     end
 
-    toy_class = Class.new(SecondaryActiveRecord::Base) do
+    toy_class = Class.new(ActiveRecord::Base) do
       def self.name; "Toy"; end
     end
 
-    wheel_class = Class.new(SecondaryActiveRecord::Base) do
+    wheel_class = Class.new(ActiveRecord::Base) do
       def self.name; "Wheel"; end
       belongs_to :wheelable, polymorphic: true, touch: true
     end
@@ -410,7 +422,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_clearing_association_touches_the_old_record
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       def self.name; "Toy"; end
       belongs_to :pet, touch: true
     end
@@ -430,7 +442,7 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 
   def test_timestamp_column_values_are_present_in_the_callbacks
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "people"
 
       before_create do
@@ -458,16 +470,16 @@ class TimestampTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class TimestampsWithoutTransactionTest < SecondaryActiveRecord::TestCase
+class TimestampsWithoutTransactionTest < ActiveRecord::TestCase
   include DdlHelper
   self.use_transactional_tests = false
 
-  class TimestampAttributePost < SecondaryActiveRecord::Base
+  class TimestampAttributePost < ActiveRecord::Base
     attr_accessor :created_at, :updated_at
   end
 
   def test_do_not_write_timestamps_on_save_if_they_are_not_attributes
-    with_example_table SecondaryActiveRecord::Base.connection, "timestamp_attribute_posts", "id integer primary key" do
+    with_example_table ActiveRecord::Base.connection, "timestamp_attribute_posts", "id integer primary key" do
       post = TimestampAttributePost.new(id: 1)
       post.save! # should not try to assign and persist created_at, updated_at
       assert_nil post.created_at
@@ -476,13 +488,13 @@ class TimestampsWithoutTransactionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_index_is_created_for_both_timestamps
-    SecondaryActiveRecord::Base.connection.create_table(:foos, force: true) do |t|
+    ActiveRecord::Base.connection.create_table(:foos, force: true) do |t|
       t.timestamps null: true, index: true
     end
 
-    indexes = SecondaryActiveRecord::Base.connection.indexes("foos")
+    indexes = ActiveRecord::Base.connection.indexes("foos")
     assert_equal ["created_at", "updated_at"], indexes.flat_map(&:columns).sort
   ensure
-    SecondaryActiveRecord::Base.connection.drop_table(:foos)
+    ActiveRecord::Base.connection.drop_table(:foos)
   end
 end

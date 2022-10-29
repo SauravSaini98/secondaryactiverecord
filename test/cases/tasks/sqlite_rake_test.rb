@@ -1,24 +1,18 @@
 # frozen_string_literal: true
 
 require "cases/helper"
-require "secondary_active_record/tasks/database_tasks"
+require "active_record/tasks/database_tasks"
 require "pathname"
 
 if current_adapter?(:SQLite3Adapter)
-  module SecondaryActiveRecord
-    class SqliteDBCreateTest < SecondaryActiveRecord::TestCase
+  module ActiveRecord
+    class SqliteDBCreateTest < ActiveRecord::TestCase
       def setup
         @database      = "db_create.sqlite3"
-        @connection    = stub :connection
         @configuration = {
           "adapter"  => "sqlite3",
           "database" => @database
         }
-
-        File.stubs(:exist?).returns(false)
-        SecondaryActiveRecord::Base.stubs(:connection).returns(@connection)
-        SecondaryActiveRecord::Base.stubs(:establish_connection).returns(true)
-
         $stdout, @original_stdout = StringIO.new, $stdout
         $stderr, @original_stderr = StringIO.new, $stderr
       end
@@ -28,63 +22,65 @@ if current_adapter?(:SQLite3Adapter)
       end
 
       def test_db_checks_database_exists
-        File.expects(:exist?).with(@database).returns(false)
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+        ActiveRecord::Base.stub(:establish_connection, nil) do
+          assert_called_with(File, :exist?, [@database], returns: false) do
+            ActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+          end
+        end
       end
 
       def test_when_db_created_successfully_outputs_info_to_stdout
-        SecondaryActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+        ActiveRecord::Base.stub(:establish_connection, nil) do
+          ActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
 
-        assert_equal "Created database '#{@database}'\n", $stdout.string
+          assert_equal "Created database '#{@database}'\n", $stdout.string
+        end
       end
 
       def test_db_create_when_file_exists
-        File.stubs(:exist?).returns(true)
+        File.stub(:exist?, true) do
+          ActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
 
-        SecondaryActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
-
-        assert_equal "Database '#{@database}' already exists\n", $stderr.string
+          assert_equal "Database '#{@database}' already exists\n", $stderr.string
+        end
       end
 
       def test_db_create_with_file_does_nothing
-        File.stubs(:exist?).returns(true)
-        $stderr.stubs(:puts).returns(nil)
-
-        SecondaryActiveRecord::Base.expects(:establish_connection).never
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+        File.stub(:exist?, true) do
+          assert_not_called(ActiveRecord::Base, :establish_connection) do
+            ActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+          end
+        end
       end
 
       def test_db_create_establishes_a_connection
-        SecondaryActiveRecord::Base.expects(:establish_connection).with(@configuration)
+        calls = []
+        ActiveRecord::Base.stub(:establish_connection, proc { |*args| calls << args }) do
+          ActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+        end
 
-        SecondaryActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root"
+        assert_equal [@configuration.symbolize_keys], calls.map { |c| c.first.configuration_hash }
       end
 
       def test_db_create_with_error_prints_message
-        SecondaryActiveRecord::Base.stubs(:establish_connection).raises(Exception)
-
-        $stderr.stubs(:puts).returns(true)
-        $stderr.expects(:puts).
-          with("Couldn't create database for #{@configuration.inspect}")
-
-        assert_raises(Exception) { SecondaryActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root" }
+        ActiveRecord::Base.stub(:establish_connection, proc { raise Exception }) do
+          assert_raises(Exception) { ActiveRecord::Tasks::DatabaseTasks.create @configuration, "/rails/root" }
+          assert_match "Couldn't create '#{@configuration['database']}' database. Please check your configuration.", $stderr.string
+        end
       end
     end
 
-    class SqliteDBDropTest < SecondaryActiveRecord::TestCase
+    class SqliteDBDropTest < ActiveRecord::TestCase
       def setup
         @database      = "db_create.sqlite3"
-        @path          = stub(to_s: "/absolute/path", absolute?: true)
         @configuration = {
           "adapter"  => "sqlite3",
           "database" => @database
         }
-
-        Pathname.stubs(:new).returns(@path)
-        File.stubs(:join).returns("/former/relative/path")
-        FileUtils.stubs(:rm).returns(true)
+        @path = Class.new do
+          def to_s; "/absolute/path" end
+          def absolute?; true end
+        end.new
 
         $stdout, @original_stdout = StringIO.new, $stdout
         $stderr, @original_stderr = StringIO.new, $stderr
@@ -95,87 +91,86 @@ if current_adapter?(:SQLite3Adapter)
       end
 
       def test_creates_path_from_database
-        Pathname.expects(:new).with(@database).returns(@path)
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+        assert_called_with(Pathname, :new, [@database], returns: @path) do
+          ActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+        end
       end
 
       def test_removes_file_with_absolute_path
-        File.stubs(:exist?).returns(true)
-        @path.stubs(:absolute?).returns(true)
-
-        FileUtils.expects(:rm).with("/absolute/path")
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+        Pathname.stub(:new, @path) do
+          assert_called_with(FileUtils, :rm, ["/absolute/path"]) do
+            ActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+          end
+        end
       end
 
       def test_generates_absolute_path_with_given_root
-        @path.stubs(:absolute?).returns(false)
-
-        File.expects(:join).with("/rails/root", @path).
-          returns("/former/relative/path")
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+        Pathname.stub(:new, @path) do
+          @path.stub(:absolute?, false) do
+            assert_called_with(File, :join, ["/rails/root", @path],
+              returns: "/former/relative/path"
+            ) do
+              ActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+            end
+          end
+        end
       end
 
       def test_removes_file_with_relative_path
-        File.stubs(:exist?).returns(true)
-        @path.stubs(:absolute?).returns(false)
-
-        FileUtils.expects(:rm).with("/former/relative/path")
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+        File.stub(:join, "/former/relative/path") do
+          @path.stub(:absolute?, false) do
+            assert_called_with(FileUtils, :rm, ["/former/relative/path"]) do
+              ActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+            end
+          end
+        end
       end
 
       def test_when_db_dropped_successfully_outputs_info_to_stdout
-        SecondaryActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
+        FileUtils.stub(:rm, nil) do
+          ActiveRecord::Tasks::DatabaseTasks.drop @configuration, "/rails/root"
 
-        assert_equal "Dropped database '#{@database}'\n", $stdout.string
-      end
-    end
-
-    class SqliteDBCharsetTest < SecondaryActiveRecord::TestCase
-      def setup
-        @database      = "db_create.sqlite3"
-        @connection    = stub :connection
-        @configuration = {
-          "adapter"  => "sqlite3",
-          "database" => @database
-        }
-
-        File.stubs(:exist?).returns(false)
-        SecondaryActiveRecord::Base.stubs(:connection).returns(@connection)
-        SecondaryActiveRecord::Base.stubs(:establish_connection).returns(true)
-      end
-
-      def test_db_retrieves_charset
-        @connection.expects(:encoding)
-        SecondaryActiveRecord::Tasks::DatabaseTasks.charset @configuration, "/rails/root"
-      end
-    end
-
-    class SqliteDBCollationTest < SecondaryActiveRecord::TestCase
-      def setup
-        @database      = "db_create.sqlite3"
-        @connection    = stub :connection
-        @configuration = {
-          "adapter"  => "sqlite3",
-          "database" => @database
-        }
-
-        File.stubs(:exist?).returns(false)
-        SecondaryActiveRecord::Base.stubs(:connection).returns(@connection)
-        SecondaryActiveRecord::Base.stubs(:establish_connection).returns(true)
-      end
-
-      def test_db_retrieves_collation
-        assert_raise NoMethodError do
-          SecondaryActiveRecord::Tasks::DatabaseTasks.collation @configuration, "/rails/root"
+          assert_equal "Dropped database '#{@database}'\n", $stdout.string
         end
       end
     end
 
-    class SqliteStructureDumpTest < SecondaryActiveRecord::TestCase
+    class SqliteDBCharsetTest < ActiveRecord::TestCase
+      def setup
+        @database      = "db_create.sqlite3"
+        @connection    = Class.new { def encoding; end }.new
+        @configuration = {
+          "adapter"  => "sqlite3",
+          "database" => @database
+        }
+      end
+
+      def test_db_retrieves_charset
+        ActiveRecord::Base.stub(:connection, @connection) do
+          assert_called(@connection, :encoding) do
+            ActiveRecord::Tasks::DatabaseTasks.charset @configuration, "/rails/root"
+          end
+        end
+      end
+    end
+
+    class SqliteDBCollationTest < ActiveRecord::TestCase
+      def setup
+        @database      = "db_create.sqlite3"
+        @configuration = {
+          "adapter"  => "sqlite3",
+          "database" => @database
+        }
+      end
+
+      def test_db_retrieves_collation
+        assert_raise NoMethodError do
+          ActiveRecord::Tasks::DatabaseTasks.collation @configuration, "/rails/root"
+        end
+      end
+    end
+
+    class SqliteStructureDumpTest < ActiveRecord::TestCase
       def setup
         @database      = "db_create.sqlite3"
         @configuration = {
@@ -191,7 +186,7 @@ if current_adapter?(:SQLite3Adapter)
         dbfile   = @database
         filename = "awesome-file.sql"
 
-        SecondaryActiveRecord::Tasks::DatabaseTasks.structure_dump @configuration, filename, "/rails/root"
+        ActiveRecord::Tasks::DatabaseTasks.structure_dump @configuration, filename, "/rails/root"
         assert File.exist?(dbfile)
         assert File.exist?(filename)
         assert_match(/CREATE TABLE foo/, File.read(filename))
@@ -204,9 +199,9 @@ if current_adapter?(:SQLite3Adapter)
       def test_structure_dump_with_ignore_tables
         dbfile   = @database
         filename = "awesome-file.sql"
-        SecondaryActiveRecord::SchemaDumper.expects(:ignore_tables).returns(["foo"])
-
-        SecondaryActiveRecord::Tasks::DatabaseTasks.structure_dump(@configuration, filename, "/rails/root")
+        assert_called(ActiveRecord::SchemaDumper, :ignore_tables, returns: ["foo"]) do
+          ActiveRecord::Tasks::DatabaseTasks.structure_dump(@configuration, filename, "/rails/root")
+        end
         assert File.exist?(dbfile)
         assert File.exist?(filename)
         assert_match(/bar/, File.read(filename))
@@ -219,14 +214,19 @@ if current_adapter?(:SQLite3Adapter)
       def test_structure_dump_execution_fails
         dbfile   = @database
         filename = "awesome-file.sql"
-        Kernel.expects(:system).with("sqlite3", "--noop", "db_create.sqlite3", ".schema", out: "awesome-file.sql").returns(nil)
-
-        e = assert_raise(RuntimeError) do
-          with_structure_dump_flags(["--noop"]) do
-            quietly { SecondaryActiveRecord::Tasks::DatabaseTasks.structure_dump(@configuration, filename, "/rails/root") }
+        assert_called_with(
+          Kernel,
+          :system,
+          ["sqlite3", "--noop", "db_create.sqlite3", ".schema", out: "awesome-file.sql"],
+          returns: nil
+        ) do
+          e = assert_raise(RuntimeError) do
+            with_structure_dump_flags(["--noop"]) do
+              quietly { ActiveRecord::Tasks::DatabaseTasks.structure_dump(@configuration, filename, "/rails/root") }
+            end
           end
+          assert_match("failed to execute:", e.message)
         end
-        assert_match("failed to execute:", e.message)
       ensure
         FileUtils.rm_f(filename)
         FileUtils.rm_f(dbfile)
@@ -234,15 +234,15 @@ if current_adapter?(:SQLite3Adapter)
 
       private
         def with_structure_dump_flags(flags)
-          old = SecondaryActiveRecord::Tasks::DatabaseTasks.structure_dump_flags
-          SecondaryActiveRecord::Tasks::DatabaseTasks.structure_dump_flags = flags
+          old = ActiveRecord::Tasks::DatabaseTasks.structure_dump_flags
+          ActiveRecord::Tasks::DatabaseTasks.structure_dump_flags = flags
           yield
         ensure
-          SecondaryActiveRecord::Tasks::DatabaseTasks.structure_dump_flags = old
+          ActiveRecord::Tasks::DatabaseTasks.structure_dump_flags = old
         end
     end
 
-    class SqliteStructureLoadTest < SecondaryActiveRecord::TestCase
+    class SqliteStructureLoadTest < ActiveRecord::TestCase
       def setup
         @database      = "db_create.sqlite3"
         @configuration = {
@@ -256,7 +256,7 @@ if current_adapter?(:SQLite3Adapter)
         filename = "awesome-file.sql"
 
         open(filename, "w") { |f| f.puts("select datetime('now', 'localtime');") }
-        SecondaryActiveRecord::Tasks::DatabaseTasks.structure_load @configuration, filename, "/rails/root"
+        ActiveRecord::Tasks::DatabaseTasks.structure_load @configuration, filename, "/rails/root"
         assert File.exist?(dbfile)
       ensure
         FileUtils.rm_f(filename)

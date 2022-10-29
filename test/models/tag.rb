@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Tag < SecondaryActiveRecord::Base
+class Tag < ActiveRecord::Base
   has_many :taggings
   has_many :taggables, through: :taggings
   has_one  :tagging

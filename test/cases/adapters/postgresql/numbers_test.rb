@@ -2,11 +2,11 @@
 
 require "cases/helper"
 
-class PostgresqlNumberTest < SecondaryActiveRecord::PostgreSQLTestCase
-  class PostgresqlNumber < SecondaryActiveRecord::Base; end
+class PostgresqlNumberTest < ActiveRecord::PostgreSQLTestCase
+  class PostgresqlNumber < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("postgresql_numbers", force: true) do |t|
       t.column "single", "REAL"
       t.column "double", "DOUBLE PRECISION"

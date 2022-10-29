@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Pet < SecondaryActiveRecord::Base
+class Pet < ActiveRecord::Base
   attr_accessor :current_user
 
   self.primary_key = :pet_id

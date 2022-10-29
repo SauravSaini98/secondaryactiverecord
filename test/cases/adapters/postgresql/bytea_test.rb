@@ -3,21 +3,19 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlByteaTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlByteaTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
-  class ByteaDataType < SecondaryActiveRecord::Base
+  class ByteaDataType < ActiveRecord::Base
     self.table_name = "bytea_data_type"
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
-    begin
-      @connection.transaction do
-        @connection.create_table("bytea_data_type") do |t|
-          t.binary "payload"
-          t.binary "serialized"
-        end
+    @connection = ActiveRecord::Base.connection
+    @connection.transaction do
+      @connection.create_table("bytea_data_type") do |t|
+        t.binary "payload"
+        t.binary "serialized"
       end
     end
     @column = ByteaDataType.columns_hash["payload"]
@@ -29,13 +27,13 @@ class PostgresqlByteaTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_column
-    assert @column.is_a?(SecondaryActiveRecord::ConnectionAdapters::PostgreSQLColumn)
+    assert @column.is_a?(ActiveRecord::ConnectionAdapters::PostgreSQLColumn)
     assert_equal :binary, @column.type
   end
 
   def test_binary_columns_are_limitless_the_upper_limit_is_one_GB
     assert_equal "bytea", @connection.type_to_sql(:binary, limit: 100_000)
-    assert_raise SecondaryActiveRecord::ActiveRecordError do
+    assert_raise ArgumentError do
       @connection.type_to_sql(:binary, limit: 4294967295)
     end
   end
@@ -49,7 +47,7 @@ class PostgresqlByteaTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_type_cast_binary_value
-    data = "\u001F\x8B".dup.force_encoding("BINARY")
+    data = (+"\u001F\x8B").force_encoding("BINARY")
     assert_equal(data, @type.deserialize(data))
   end
 
@@ -89,7 +87,7 @@ class PostgresqlByteaTest < SecondaryActiveRecord::PostgreSQLTestCase
 
   def test_via_to_sql_with_complicating_connection
     Thread.new do
-      other_conn = SecondaryActiveRecord::Base.connection
+      other_conn = ActiveRecord::Base.connection
       other_conn.execute("SET standard_conforming_strings = off")
       other_conn.execute("SET escape_string_warning = off")
     end.join

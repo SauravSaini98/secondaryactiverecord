@@ -4,7 +4,7 @@ require "cases/helper"
 require "models/pirate"
 require "models/bird"
 
-class NestedAttributesWithCallbacksTest < SecondaryActiveRecord::TestCase
+class NestedAttributesWithCallbacksTest < ActiveRecord::TestCase
   Pirate.has_many(:birds_with_add_load,
                   class_name: "Bird",
                   before_add: proc { |p, b|
@@ -137,7 +137,7 @@ class NestedAttributesWithCallbacksTest < SecondaryActiveRecord::TestCase
   end
 
   def assert_assignment_affects_records_in_target(association_name)
-    association = @pirate.send(association_name)
+    association = @pirate.public_send(association_name)
     assert association.detect { |b| b == bird_to_update }.name_changed?,
       "Update record not updated"
     assert association.detect { |b| b == bird_to_destroy }.marked_for_destruction?,

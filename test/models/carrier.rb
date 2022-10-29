@@ -1,4 +1,4 @@
 # frozen_string_literal: true
 
-class Carrier < SecondaryActiveRecord::Base
+class Carrier < ActiveRecord::Base
 end

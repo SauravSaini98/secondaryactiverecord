@@ -3,13 +3,13 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlSerialTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlSerialTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
-  class PostgresqlSerial < SecondaryActiveRecord::Base; end
+  class PostgresqlSerial < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table "postgresql_serials", force: true do |t|
       t.serial :seq
       t.integer :serials_id, default: -> { "nextval('postgresql_serials_id_seq')" }
@@ -45,13 +45,13 @@ class PostgresqlSerialTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 end
 
-class PostgresqlBigSerialTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlBigSerialTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
-  class PostgresqlBigSerial < SecondaryActiveRecord::Base; end
+  class PostgresqlBigSerial < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table "postgresql_big_serials", force: true do |t|
       t.bigserial :seq
       t.bigint :serials_id, default: -> { "nextval('postgresql_big_serials_id_seq')" }
@@ -88,11 +88,11 @@ class PostgresqlBigSerialTest < SecondaryActiveRecord::PostgreSQLTestCase
 end
 
 module SequenceNameDetectionTestCases
-  class CollidedSequenceNameTest < SecondaryActiveRecord::PostgreSQLTestCase
+  class CollidedSequenceNameTest < ActiveRecord::PostgreSQLTestCase
     include SchemaDumpingHelper
 
     def setup
-      @connection = SecondaryActiveRecord::Base.connection
+      @connection = ActiveRecord::Base.connection
       @connection.create_table :foo_bar, force: true do |t|
         t.serial :baz_id
       end
@@ -122,12 +122,12 @@ module SequenceNameDetectionTestCases
     end
   end
 
-  class LongerSequenceNameDetectionTest < SecondaryActiveRecord::PostgreSQLTestCase
+  class LongerSequenceNameDetectionTest < ActiveRecord::PostgreSQLTestCase
     include SchemaDumpingHelper
 
     def setup
       @table_name = "long_table_name_to_test_sequence_name_detection_for_serial_cols"
-      @connection = SecondaryActiveRecord::Base.connection
+      @connection = ActiveRecord::Base.connection
       @connection.create_table @table_name, force: true do |t|
         t.serial :seq
         t.bigserial :bigseq

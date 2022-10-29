@@ -2,10 +2,10 @@
 
 require "cases/migration/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class ColumnAttributesTest < SecondaryActiveRecord::TestCase
-      include SecondaryActiveRecord::Migration::TestHelper
+    class ColumnAttributesTest < ActiveRecord::TestCase
+      include ActiveRecord::Migration::TestHelper
 
       self.use_transactional_tests = false
 
@@ -176,11 +176,9 @@ module SecondaryActiveRecord
 
       if current_adapter?(:Mysql2Adapter, :PostgreSQLAdapter)
         def test_out_of_range_limit_should_raise
-          assert_raise(ActiveRecordError) { add_column :test_models, :integer_too_big, :integer, limit: 10 }
-
-          unless current_adapter?(:PostgreSQLAdapter)
-            assert_raise(ActiveRecordError) { add_column :test_models, :text_too_big, :text, limit: 0xfffffffff }
-          end
+          assert_raise(ArgumentError) { add_column :test_models, :integer_too_big, :integer, limit: 10 }
+          assert_raise(ArgumentError) { add_column :test_models, :text_too_big, :text, limit: 0xfffffffff }
+          assert_raise(ArgumentError) { add_column :test_models, :binary_too_big, :binary, limit: 0xfffffffff }
         end
       end
     end

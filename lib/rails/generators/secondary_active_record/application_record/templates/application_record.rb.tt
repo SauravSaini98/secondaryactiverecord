@@ -1,5 +1,0 @@
-<% module_namespacing do -%>
-class ApplicationRecord < SecondaryActiveRecord::Base
-  self.abstract_class = true
-end
-<% end -%>

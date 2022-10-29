@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module SecondaryActiveRecord
+module ActiveRecord
   module ValidationsRepairHelper
     extend ActiveSupport::Concern
 

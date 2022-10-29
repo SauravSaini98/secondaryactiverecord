@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-class Treaty < SecondaryActiveRecord::Base
-  self.primary_key = :treaty_id
-
+class Treaty < ActiveRecord::Base
   has_and_belongs_to_many :countries
 end

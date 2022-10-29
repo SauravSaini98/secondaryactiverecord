@@ -2,14 +2,14 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class CreateJoinTableTest < SecondaryActiveRecord::TestCase
+    class CreateJoinTableTest < ActiveRecord::TestCase
       attr_reader :connection
 
       def setup
         super
-        @connection = SecondaryActiveRecord::Base.connection
+        @connection = ActiveRecord::Base.connection
       end
 
       teardown do
@@ -95,42 +95,42 @@ module SecondaryActiveRecord
         connection.create_join_table :artists, :musics
         connection.drop_join_table :artists, :musics
 
-        assert !connection.table_exists?("artists_musics")
+        assert_not connection.table_exists?("artists_musics")
       end
 
       def test_drop_join_table_with_strings
         connection.create_join_table :artists, :musics
         connection.drop_join_table "artists", "musics"
 
-        assert !connection.table_exists?("artists_musics")
+        assert_not connection.table_exists?("artists_musics")
       end
 
       def test_drop_join_table_with_the_proper_order
         connection.create_join_table :videos, :musics
         connection.drop_join_table :videos, :musics
 
-        assert !connection.table_exists?("musics_videos")
+        assert_not connection.table_exists?("musics_videos")
       end
 
       def test_drop_join_table_with_the_table_name
         connection.create_join_table :artists, :musics, table_name: :catalog
         connection.drop_join_table :artists, :musics, table_name: :catalog
 
-        assert !connection.table_exists?("catalog")
+        assert_not connection.table_exists?("catalog")
       end
 
       def test_drop_join_table_with_the_table_name_as_string
         connection.create_join_table :artists, :musics, table_name: "catalog"
         connection.drop_join_table :artists, :musics, table_name: "catalog"
 
-        assert !connection.table_exists?("catalog")
+        assert_not connection.table_exists?("catalog")
       end
 
       def test_drop_join_table_with_column_options
         connection.create_join_table :artists, :musics, column_options: { null: true }
         connection.drop_join_table :artists, :musics, column_options: { null: true }
 
-        assert !connection.table_exists?("artists_musics")
+        assert_not connection.table_exists?("artists_musics")
       end
 
       def test_create_and_drop_join_table_with_common_prefix
@@ -139,7 +139,7 @@ module SecondaryActiveRecord
           assert connection.table_exists?("audio_artists_musics")
 
           connection.drop_join_table "audio_artists", "audio_musics"
-          assert !connection.table_exists?("audio_artists_musics"), "Should have dropped join table, but didn't"
+          assert_not connection.table_exists?("audio_artists_musics"), "Should have dropped join table, but didn't"
         end
       end
 
@@ -151,7 +151,6 @@ module SecondaryActiveRecord
       end
 
       private
-
         def with_table_cleanup
           tables_before = connection.data_sources
 

@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   module ConnectionAdapters
-    class AdapterLeasingTest < SecondaryActiveRecord::TestCase
+    class AdapterLeasingTest < ActiveRecord::TestCase
       class Pool < ConnectionPool
         def insert_connection_for_test!(c)
           synchronize do
@@ -39,7 +39,9 @@ module SecondaryActiveRecord
       end
 
       def test_close
-        pool = Pool.new(ConnectionSpecification.new("primary", {}, nil))
+        db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", {})
+        pool_config = ActiveRecord::ConnectionAdapters::PoolConfig.new(ActiveRecord::Base, db_config, :writing, :default)
+        pool = Pool.new(pool_config)
         pool.insert_connection_for_test! @adapter
         @adapter.pool = pool
 

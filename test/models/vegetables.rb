@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Vegetable < SecondaryActiveRecord::Base
+class Vegetable < ActiveRecord::Base
   validates_presence_of :name
 
   def self.inheritance_column
@@ -22,4 +22,12 @@ end
 
 class RedCabbage < Cabbage
   belongs_to :seller, class_name: "Company"
+end
+
+class YellingVegetable < Vegetable
+  after_initialize :format_name
+
+  def format_name
+    self.name = name&.upcase
+  end
 end

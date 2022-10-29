@@ -4,16 +4,16 @@ require "cases/helper"
 require "models/computer"
 require "models/developer"
 
-class PreparedStatementsDisabledTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PreparedStatementsDisabledTest < ActiveRecord::PostgreSQLTestCase
   fixtures :developers
 
   def setup
-    @conn = SecondaryActiveRecord::Base.establish_connection :arunit_without_prepared_statements
+    @conn = ActiveRecord::Base.establish_connection :arunit_without_prepared_statements
   end
 
   def teardown
     @conn.release_connection
-    SecondaryActiveRecord::Base.establish_connection :arunit
+    ActiveRecord::Base.establish_connection :arunit
   end
 
   def test_select_query_works_even_when_prepared_statements_are_disabled

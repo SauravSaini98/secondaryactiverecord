@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   module Coders
-    class JSONTest < SecondaryActiveRecord::TestCase
+    class JSONTest < ActiveRecord::TestCase
       def test_returns_nil_if_empty_string_given
         assert_nil JSON.load("")
       end

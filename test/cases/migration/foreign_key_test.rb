@@ -3,12 +3,12 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-if SecondaryActiveRecord::Base.connection.supports_foreign_keys_in_create?
-  module SecondaryActiveRecord
+if ActiveRecord::Base.connection.supports_foreign_keys?
+  module ActiveRecord
     class Migration
-      class ForeignKeyInCreateTest < SecondaryActiveRecord::TestCase
+      class ForeignKeyInCreateTest < ActiveRecord::TestCase
         def test_foreign_keys
-          foreign_keys = SecondaryActiveRecord::Base.connection.foreign_keys("fk_test_has_fk")
+          foreign_keys = ActiveRecord::Base.connection.foreign_keys("fk_test_has_fk")
           assert_equal 1, foreign_keys.size
 
           fk = foreign_keys.first
@@ -19,25 +19,165 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys_in_create?
           assert_equal "fk_name", fk.name unless current_adapter?(:SQLite3Adapter)
         end
       end
+
+      class ForeignKeyChangeColumnTest < ActiveRecord::TestCase
+        self.use_transactional_tests = false
+
+        class Rocket < ActiveRecord::Base
+          has_many :astronauts
+        end
+
+        class Astronaut < ActiveRecord::Base
+          belongs_to :rocket
+        end
+
+        class CreateRocketsMigration < ActiveRecord::Migration::Current
+          def change
+            create_table :rockets do |t|
+              t.string :name
+            end
+
+            create_table :astronauts do |t|
+              t.string :name
+              t.references :rocket, foreign_key: true
+            end
+          end
+        end
+
+        def setup
+          @connection = ActiveRecord::Base.connection
+          @migration = CreateRocketsMigration.new
+          silence_stream($stdout) { @migration.migrate(:up) }
+          Rocket.reset_table_name
+          Rocket.reset_column_information
+          Astronaut.reset_table_name
+          Astronaut.reset_column_information
+        end
+
+        def teardown
+          silence_stream($stdout) { @migration.migrate(:down) }
+          Rocket.reset_table_name
+          Rocket.reset_column_information
+          Astronaut.reset_table_name
+          Astronaut.reset_column_information
+        end
+
+        def test_change_column_of_parent_table
+          rocket = Rocket.create!(name: "myrocket")
+          rocket.astronauts << Astronaut.create!
+
+          @connection.change_column_null Rocket.table_name, :name, false
+
+          foreign_keys = @connection.foreign_keys(Astronaut.table_name)
+          assert_equal 1, foreign_keys.size
+
+          fk = foreign_keys.first
+          assert_equal "myrocket", Rocket.first.name
+          assert_equal Astronaut.table_name, fk.from_table
+          assert_equal Rocket.table_name, fk.to_table
+        end
+
+        def test_rename_column_of_child_table
+          rocket = Rocket.create!(name: "myrocket")
+          rocket.astronauts << Astronaut.create!
+
+          @connection.rename_column Astronaut.table_name, :name, :astronaut_name
+
+          foreign_keys = @connection.foreign_keys(Astronaut.table_name)
+          assert_equal 1, foreign_keys.size
+
+          fk = foreign_keys.first
+          assert_equal "myrocket", Rocket.first.name
+          assert_equal Astronaut.table_name, fk.from_table
+          assert_equal Rocket.table_name, fk.to_table
+        end
+
+        def test_rename_reference_column_of_child_table
+          if current_adapter?(:Mysql2Adapter) && !@connection.send(:supports_rename_index?)
+            skip "Cannot drop index, needed in a foreign key constraint"
+          end
+
+          rocket = Rocket.create!(name: "myrocket")
+          rocket.astronauts << Astronaut.create!
+
+          @connection.rename_column Astronaut.table_name, :rocket_id, :new_rocket_id
+
+          foreign_keys = @connection.foreign_keys(Astronaut.table_name)
+          assert_equal 1, foreign_keys.size
+
+          fk = foreign_keys.first
+          assert_equal "myrocket", Rocket.first.name
+          assert_equal Astronaut.table_name, fk.from_table
+          assert_equal Rocket.table_name, fk.to_table
+          assert_equal "new_rocket_id", fk.options[:column]
+        end
+
+        def test_remove_reference_column_of_child_table
+          rocket = Rocket.create!(name: "myrocket")
+          rocket.astronauts << Astronaut.create!
+
+          @connection.remove_column Astronaut.table_name, :rocket_id
+
+          assert_empty @connection.foreign_keys(Astronaut.table_name)
+        end
+
+        def test_remove_foreign_key_by_column
+          rocket = Rocket.create!(name: "myrocket")
+          rocket.astronauts << Astronaut.create!
+
+          @connection.remove_foreign_key Astronaut.table_name, column: :rocket_id
+
+          assert_empty @connection.foreign_keys(Astronaut.table_name)
+        end
+
+        def test_remove_foreign_key_by_column_in_change_table
+          rocket = Rocket.create!(name: "myrocket")
+          rocket.astronauts << Astronaut.create!
+
+          @connection.change_table Astronaut.table_name do |t|
+            t.remove_foreign_key column: :rocket_id
+          end
+
+          assert_empty @connection.foreign_keys(Astronaut.table_name)
+        end
+      end
+
+      class ForeignKeyChangeColumnWithPrefixTest < ForeignKeyChangeColumnTest
+        setup do
+          ActiveRecord::Base.table_name_prefix = "p_"
+        end
+
+        teardown do
+          ActiveRecord::Base.table_name_prefix = nil
+        end
+      end
+
+      class ForeignKeyChangeColumnWithSuffixTest < ForeignKeyChangeColumnTest
+        setup do
+          ActiveRecord::Base.table_name_suffix = "_s"
+        end
+
+        teardown do
+          ActiveRecord::Base.table_name_suffix = nil
+        end
+      end
     end
   end
-end
 
-if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
-  module SecondaryActiveRecord
+  module ActiveRecord
     class Migration
-      class ForeignKeyTest < SecondaryActiveRecord::TestCase
+      class ForeignKeyTest < ActiveRecord::TestCase
         include SchemaDumpingHelper
         include ActiveSupport::Testing::Stream
 
-        class Rocket < SecondaryActiveRecord::Base
+        class Rocket < ActiveRecord::Base
         end
 
-        class Astronaut < SecondaryActiveRecord::Base
+        class Astronaut < ActiveRecord::Base
         end
 
         setup do
-          @connection = SecondaryActiveRecord::Base.connection
+          @connection = ActiveRecord::Base.connection
           @connection.create_table "rockets", force: true do |t|
             t.string :name
           end
@@ -49,8 +189,8 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
         end
 
         teardown do
-          @connection.drop_table "astronauts", if_exists: true
-          @connection.drop_table "rockets", if_exists: true
+          @connection.drop_table "astronauts", if_exists: true rescue nil
+          @connection.drop_table "rockets", if_exists: true rescue nil
         end
 
         def test_foreign_keys
@@ -62,7 +202,7 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           assert_equal "fk_test_has_pk", fk.to_table
           assert_equal "fk_id", fk.column
           assert_equal "pk_id", fk.primary_key
-          assert_equal "fk_name", fk.name
+          assert_equal "fk_name", fk.name unless current_adapter?(:SQLite3Adapter)
         end
 
         def test_add_foreign_key_inferes_column
@@ -76,7 +216,7 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           assert_equal "rockets", fk.to_table
           assert_equal "rocket_id", fk.column
           assert_equal "id", fk.primary_key
-          assert_equal("fk_rails_78146ddd2e", fk.name)
+          assert_equal "fk_rails_78146ddd2e", fk.name unless current_adapter?(:SQLite3Adapter)
         end
 
         def test_add_foreign_key_with_column
@@ -90,7 +230,7 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           assert_equal "rockets", fk.to_table
           assert_equal "rocket_id", fk.column
           assert_equal "id", fk.primary_key
-          assert_equal("fk_rails_78146ddd2e", fk.name)
+          assert_equal "fk_rails_78146ddd2e", fk.name unless current_adapter?(:SQLite3Adapter)
         end
 
         def test_add_foreign_key_with_non_standard_primary_key
@@ -109,7 +249,7 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           assert_equal "space_shuttles", fk.to_table
           assert_equal "pk", fk.primary_key
         ensure
-          @connection.remove_foreign_key :astronauts, name: "custom_pk"
+          @connection.remove_foreign_key :astronauts, name: "custom_pk", to_table: "space_shuttles"
           @connection.drop_table :space_shuttles
         end
 
@@ -168,6 +308,20 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           assert_equal :nullify, fk.on_update
         end
 
+        def test_add_foreign_key_with_non_existent_from_table_raises
+          e = assert_raises StatementInvalid do
+            @connection.add_foreign_key :missions, :rockets
+          end
+          assert_match(/missions/, e.message)
+        end
+
+        def test_add_foreign_key_with_non_existent_to_table_raises
+          e = assert_raises StatementInvalid do
+            @connection.add_foreign_key :missions, :rockets
+          end
+          assert_match(/missions/, e.message)
+        end
+
         def test_foreign_key_exists
           @connection.add_foreign_key :astronauts, :rockets
 
@@ -183,10 +337,26 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
         end
 
         def test_foreign_key_exists_by_name
+          skip if current_adapter?(:SQLite3Adapter)
+
           @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", name: "fancy_named_fk"
 
           assert @connection.foreign_key_exists?(:astronauts, name: "fancy_named_fk")
           assert_not @connection.foreign_key_exists?(:astronauts, name: "other_fancy_named_fk")
+        end
+
+        def test_foreign_key_exists_in_change_table
+          @connection.change_table(:astronauts) do |t|
+            t.foreign_key :rockets, column: "rocket_id", name: "fancy_named_fk"
+
+            assert t.foreign_key_exists?(column: "rocket_id")
+            assert_not t.foreign_key_exists?(column: "star_id")
+
+            unless current_adapter?(:SQLite3Adapter)
+              assert t.foreign_key_exists?(name: "fancy_named_fk")
+              assert_not t.foreign_key_exists?(name: "other_fancy_named_fk")
+            end
+          end
         end
 
         def test_remove_foreign_key_inferes_column
@@ -214,6 +384,8 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
         end
 
         def test_remove_foreign_key_by_name
+          skip if current_adapter?(:SQLite3Adapter)
+
           @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", name: "fancy_named_fk"
 
           assert_equal 1, @connection.foreign_keys("astronauts").size
@@ -222,12 +394,25 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
         end
 
         def test_remove_foreign_non_existing_foreign_key_raises
-          assert_raises ArgumentError do
+          e = assert_raises ArgumentError do
             @connection.remove_foreign_key :astronauts, :rockets
           end
+          assert_equal "Table 'astronauts' has no foreign key for rockets", e.message
         end
 
-        if SecondaryActiveRecord::Base.connection.supports_validate_constraints?
+        def test_remove_foreign_key_by_the_select_one_on_the_same_table
+          @connection.add_foreign_key :astronauts, :rockets
+          @connection.add_reference :astronauts, :myrocket, foreign_key: { to_table: :rockets }
+
+          assert_equal 2, @connection.foreign_keys("astronauts").size
+
+          @connection.remove_foreign_key :astronauts, :rockets, column: "myrocket_id"
+
+          assert_equal [["astronauts", "rockets", "rocket_id"]],
+            @connection.foreign_keys("astronauts").map { |fk| [fk.from_table, fk.to_table, fk.column] }
+        end
+
+        if ActiveRecord::Base.connection.supports_validate_constraints?
           def test_add_invalid_foreign_key
             @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", validate: false
 
@@ -295,6 +480,80 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           end
         end
 
+        if ActiveRecord::Base.connection.supports_deferrable_constraints?
+          def test_deferrable_foreign_key
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: true
+
+            foreign_keys = @connection.foreign_keys("astronauts")
+            assert_equal 1, foreign_keys.size
+
+            fk = foreign_keys.first
+            assert_equal true, fk.options[:deferrable]
+          end
+
+          def test_not_deferrable_foreign_key
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: false
+
+            foreign_keys = @connection.foreign_keys("astronauts")
+            assert_equal 1, foreign_keys.size
+
+            fk = foreign_keys.first
+            assert_equal false, fk.options[:deferrable]
+          end
+
+          def test_deferrable_initially_deferred_foreign_key
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: :deferred
+
+            foreign_keys = @connection.foreign_keys("astronauts")
+            assert_equal 1, foreign_keys.size
+
+            fk = foreign_keys.first
+            assert_equal :deferred, fk.options[:deferrable]
+          end
+
+          def test_deferrable_initially_immediate_foreign_key
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: :immediate
+
+            foreign_keys = @connection.foreign_keys("astronauts")
+            assert_equal 1, foreign_keys.size
+
+            fk = foreign_keys.first
+            assert_equal true, fk.options[:deferrable]
+          end
+
+          def test_schema_dumping_with_defferable
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: true
+
+            output = dump_table_schema "astronauts"
+
+            assert_match %r{\s+add_foreign_key "astronauts", "rockets", deferrable: true$}, output
+          end
+
+          def test_schema_dumping_with_disabled_defferable
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: false
+
+            output = dump_table_schema "astronauts"
+
+            assert_match %r{\s+add_foreign_key "astronauts", "rockets"$}, output
+          end
+
+          def test_schema_dumping_with_defferable_initially_deferred
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: :deferred
+
+            output = dump_table_schema "astronauts"
+
+            assert_match %r{\s+add_foreign_key "astronauts", "rockets", deferrable: :deferred$}, output
+          end
+
+          def test_schema_dumping_with_defferable_initially_immediate
+            @connection.add_foreign_key :astronauts, :rockets, column: "rocket_id", deferrable: :immediate
+
+            output = dump_table_schema "astronauts"
+
+            assert_match %r{\s+add_foreign_key "astronauts", "rockets", deferrable: true$}, output
+          end
+        end
+
         def test_schema_dumping
           @connection.add_foreign_key :astronauts, :rockets
           output = dump_table_schema "astronauts"
@@ -303,7 +562,22 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
 
         def test_schema_dumping_with_options
           output = dump_table_schema "fk_test_has_fk"
-          assert_match %r{\s+add_foreign_key "fk_test_has_fk", "fk_test_has_pk", column: "fk_id", primary_key: "pk_id", name: "fk_name"$}, output
+          if current_adapter?(:SQLite3Adapter)
+            assert_match %r{\s+add_foreign_key "fk_test_has_fk", "fk_test_has_pk", column: "fk_id", primary_key: "pk_id"$}, output
+          else
+            assert_match %r{\s+add_foreign_key "fk_test_has_fk", "fk_test_has_pk", column: "fk_id", primary_key: "pk_id", name: "fk_name"$}, output
+          end
+        end
+
+        def test_schema_dumping_with_custom_fk_ignore_pattern
+          original_pattern = ActiveRecord::SchemaDumper.fk_ignore_pattern
+          ActiveRecord::SchemaDumper.fk_ignore_pattern = /^ignored_/
+          @connection.add_foreign_key :astronauts, :rockets, name: :ignored_fk_astronauts_rockets
+
+          output = dump_table_schema "astronauts"
+          assert_match %r{\s+add_foreign_key "astronauts", "rockets"$}, output
+
+          ActiveRecord::SchemaDumper.fk_ignore_pattern = original_pattern
         end
 
         def test_schema_dumping_on_delete_and_on_update_options
@@ -313,7 +587,7 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           assert_match %r{\s+add_foreign_key "astronauts",.+on_update: :cascade,.+on_delete: :nullify$}, output
         end
 
-        class CreateCitiesAndHousesMigration < SecondaryActiveRecord::Migration::Current
+        class CreateCitiesAndHousesMigration < ActiveRecord::Migration::Current
           def change
             create_table("cities") { |t| }
 
@@ -345,60 +619,99 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_keys?
           silence_stream($stdout) { migration.migrate(:down) }
         end
 
-        class CreateSchoolsAndClassesMigration < SecondaryActiveRecord::Migration::Current
+        class CreateSchoolsAndClassesMigration < ActiveRecord::Migration::Current
           def change
             create_table(:schools)
 
             create_table(:classes) do |t|
               t.references :school
             end
-            add_foreign_key :classes, :schools
+            add_foreign_key :classes, :schools, validate: true
           end
         end
 
         def test_add_foreign_key_with_prefix
-          SecondaryActiveRecord::Base.table_name_prefix = "p_"
+          ActiveRecord::Base.table_name_prefix = "p_"
           migration = CreateSchoolsAndClassesMigration.new
           silence_stream($stdout) { migration.migrate(:up) }
           assert_equal 1, @connection.foreign_keys("p_classes").size
         ensure
           silence_stream($stdout) { migration.migrate(:down) }
-          SecondaryActiveRecord::Base.table_name_prefix = nil
+          ActiveRecord::Base.table_name_prefix = nil
         end
 
         def test_add_foreign_key_with_suffix
-          SecondaryActiveRecord::Base.table_name_suffix = "_s"
+          ActiveRecord::Base.table_name_suffix = "_s"
           migration = CreateSchoolsAndClassesMigration.new
           silence_stream($stdout) { migration.migrate(:up) }
           assert_equal 1, @connection.foreign_keys("classes_s").size
         ensure
           silence_stream($stdout) { migration.migrate(:down) }
-          SecondaryActiveRecord::Base.table_name_suffix = nil
-        end
-      end
-    end
-  end
-else
-  module SecondaryActiveRecord
-    class Migration
-      class NoForeignKeySupportTest < SecondaryActiveRecord::TestCase
-        setup do
-          @connection = SecondaryActiveRecord::Base.connection
+          ActiveRecord::Base.table_name_suffix = nil
         end
 
-        def test_add_foreign_key_should_be_noop
-          @connection.add_foreign_key :clubs, :categories
+        def test_remove_foreign_key_with_if_exists_not_set
+          @connection.add_foreign_key :astronauts, :rockets
+          assert_equal 1, @connection.foreign_keys("astronauts").size
+
+          @connection.remove_foreign_key :astronauts, :rockets
+          assert_equal [], @connection.foreign_keys("astronauts")
+
+          error = assert_raises do
+            @connection.remove_foreign_key :astronauts, :rockets
+          end
+
+          assert_equal("Table 'astronauts' has no foreign key for rockets", error.message)
         end
 
-        def test_remove_foreign_key_should_be_noop
-          @connection.remove_foreign_key :clubs, :categories
+        def test_remove_foreign_key_with_if_exists_set
+          @connection.add_foreign_key :astronauts, :rockets
+          assert_equal 1, @connection.foreign_keys("astronauts").size
+
+          @connection.remove_foreign_key :astronauts, :rockets, if_exists: true
+          assert_equal [], @connection.foreign_keys("astronauts")
+
+          assert_nothing_raised do
+            @connection.remove_foreign_key :astronauts, :rockets, if_exists: true
+          end
         end
 
-        unless current_adapter?(:SQLite3Adapter)
-          def test_foreign_keys_should_raise_not_implemented
-            assert_raises NotImplementedError do
-              @connection.foreign_keys("clubs")
+        def test_add_foreign_key_with_if_not_exists_not_set
+          @connection.add_foreign_key :astronauts, :rockets
+          assert_equal 1, @connection.foreign_keys("astronauts").size
+
+          if current_adapter?(:SQLite3Adapter)
+            assert_nothing_raised do
+              @connection.add_foreign_key :astronauts, :rockets
             end
+          else
+            error = assert_raises do
+              @connection.add_foreign_key :astronauts, :rockets
+            end
+
+            if current_adapter?(:Mysql2Adapter)
+              if ActiveRecord::Base.connection.mariadb?
+                assert_match(/Duplicate key on write or update/, error.message)
+              elsif ActiveRecord::Base.connection.database_version < "5.6"
+                assert_match(/Can't create table/, error.message)
+              elsif ActiveRecord::Base.connection.database_version < "8.0"
+                assert_match(/Can't write; duplicate key in table/, error.message)
+              else
+                assert_match(/Duplicate foreign key constraint name/, error.message)
+              end
+            else
+              assert_match(/PG::DuplicateObject: ERROR:.*for relation "astronauts" already exists/, error.message)
+            end
+
+          end
+        end
+
+        def test_add_foreign_key_with_if_not_exists_set
+          @connection.add_foreign_key :astronauts, :rockets
+          assert_equal 1, @connection.foreign_keys("astronauts").size
+
+          assert_nothing_raised do
+            @connection.add_foreign_key :astronauts, :rockets, if_not_exists: true
           end
         end
       end

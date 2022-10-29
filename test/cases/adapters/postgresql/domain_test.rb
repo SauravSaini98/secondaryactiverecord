@@ -3,15 +3,15 @@
 require "cases/helper"
 require "support/connection_helper"
 
-class PostgresqlDomainTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlDomainTest < ActiveRecord::PostgreSQLTestCase
   include ConnectionHelper
 
-  class PostgresqlDomain < SecondaryActiveRecord::Base
+  class PostgresqlDomain < ActiveRecord::Base
     self.table_name = "postgresql_domains"
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.transaction do
       @connection.execute "CREATE DOMAIN custom_money as numeric(8,2)"
       @connection.create_table("postgresql_domains") do |t|

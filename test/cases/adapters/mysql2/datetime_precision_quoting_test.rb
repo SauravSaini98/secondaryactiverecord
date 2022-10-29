@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-class Mysql2DatetimePrecisionQuotingTest < SecondaryActiveRecord::Mysql2TestCase
+class Mysql2DatetimePrecisionQuotingTest < ActiveRecord::Mysql2TestCase
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   test "microsecond precision for MySQL gte 5.6.4" do
@@ -25,30 +25,25 @@ class Mysql2DatetimePrecisionQuotingTest < SecondaryActiveRecord::Mysql2TestCase
     end
   end
 
-  test "no microsecond precision for MariaDB lt 5.3.0" do
-    stub_version "5.2.9-MariaDB" do
-      assert_no_microsecond_precision
-    end
-  end
-
   private
     def assert_microsecond_precision
-      assert_match_quoted_microsecond_datetime(/\.000001\z/)
+      assert_match_quoted_microsecond_datetime(/\.123456\z/)
     end
 
     def assert_no_microsecond_precision
-      assert_match_quoted_microsecond_datetime(/\d\z/)
+      assert_match_quoted_microsecond_datetime(/:55\z/)
     end
 
     def assert_match_quoted_microsecond_datetime(match)
-      assert_match match, @connection.quoted_date(Time.now.change(usec: 1))
+      assert_match match, @connection.quoted_date(Time.now.change(sec: 55, usec: 123456))
     end
 
     def stub_version(full_version_string)
-      @connection.stubs(:full_version).returns(full_version_string)
-      @connection.remove_instance_variable(:@version) if @connection.instance_variable_defined?(:@version)
-      yield
+      @connection.stub(:get_full_version, full_version_string) do
+        @connection.schema_cache.clear!
+        yield
+      end
     ensure
-      @connection.remove_instance_variable(:@version) if @connection.instance_variable_defined?(:@version)
+      @connection.schema_cache.clear!
     end
 end

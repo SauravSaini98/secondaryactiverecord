@@ -4,23 +4,23 @@ require "cases/helper"
 require "support/connection_helper"
 require "concurrent/atomic/cyclic_barrier"
 
-module SecondaryActiveRecord
-  class PostgresqlTransactionTest < SecondaryActiveRecord::PostgreSQLTestCase
+module ActiveRecord
+  class PostgresqlTransactionTest < ActiveRecord::PostgreSQLTestCase
     self.use_transactional_tests = false
 
-    class Sample < SecondaryActiveRecord::Base
+    class Sample < ActiveRecord::Base
       self.table_name = "samples"
     end
 
     setup do
       @abort, Thread.abort_on_exception = Thread.abort_on_exception, false
-      Thread.report_on_exception, @original_report_on_exception = false, Thread.report_on_exception if Thread.respond_to?(:report_on_exception)
+      Thread.report_on_exception, @original_report_on_exception = false, Thread.report_on_exception
 
-      @connection = SecondaryActiveRecord::Base.connection
+      connection = ActiveRecord::Base.connection
 
-      @connection.transaction do
-        @connection.drop_table "samples", if_exists: true
-        @connection.create_table("samples") do |t|
+      connection.transaction do
+        connection.drop_table "samples", if_exists: true
+        connection.create_table("samples") do |t|
           t.integer "value"
         end
       end
@@ -29,14 +29,14 @@ module SecondaryActiveRecord
     end
 
     teardown do
-      @connection.drop_table "samples", if_exists: true
+      ActiveRecord::Base.connection.drop_table "samples", if_exists: true
 
       Thread.abort_on_exception = @abort
-      Thread.report_on_exception = @original_report_on_exception if Thread.respond_to?(:report_on_exception)
+      Thread.report_on_exception = @original_report_on_exception
     end
 
     test "raises SerializationFailure when a serialization failure occurs" do
-      assert_raises(SecondaryActiveRecord::SerializationFailure) do
+      assert_raises(ActiveRecord::SerializationFailure) do
         before = Concurrent::CyclicBarrier.new(2)
         after = Concurrent::CyclicBarrier.new(2)
 
@@ -66,7 +66,7 @@ module SecondaryActiveRecord
 
     test "raises Deadlocked when a deadlock is encountered" do
       with_warning_suppression do
-        assert_raises(SecondaryActiveRecord::Deadlocked) do
+        assert_raises(ActiveRecord::Deadlocked) do
           barrier = Concurrent::CyclicBarrier.new(2)
 
           s1 = Sample.create value: 1
@@ -76,7 +76,7 @@ module SecondaryActiveRecord
             Sample.transaction do
               s1.lock!
               barrier.wait
-              s2.update_attributes value: 1
+              s2.update value: 1
             end
           end
 
@@ -84,7 +84,7 @@ module SecondaryActiveRecord
             Sample.transaction do
               s2.lock!
               barrier.wait
-              s1.update_attributes value: 2
+              s1.update value: 2
             end
           ensure
             thread.join
@@ -94,8 +94,7 @@ module SecondaryActiveRecord
     end
 
     test "raises LockWaitTimeout when lock wait timeout exceeded" do
-      skip unless SecondaryActiveRecord::Base.connection.postgresql_version >= 90300
-      assert_raises(SecondaryActiveRecord::LockWaitTimeout) do
+      assert_raises(ActiveRecord::LockWaitTimeout) do
         s = Sample.create!(value: 1)
         latch1 = Concurrent::CountDownLatch.new
         latch2 = Concurrent::CountDownLatch.new
@@ -123,7 +122,7 @@ module SecondaryActiveRecord
     end
 
     test "raises QueryCanceled when statement timeout exceeded" do
-      assert_raises(SecondaryActiveRecord::QueryCanceled) do
+      assert_raises(ActiveRecord::QueryCanceled) do
         s = Sample.create!(value: 1)
         latch1 = Concurrent::CountDownLatch.new
         latch2 = Concurrent::CountDownLatch.new
@@ -151,7 +150,7 @@ module SecondaryActiveRecord
     end
 
     test "raises QueryCanceled when canceling statement due to user request" do
-      assert_raises(SecondaryActiveRecord::QueryCanceled) do
+      assert_raises(ActiveRecord::QueryCanceled) do
         s = Sample.create!(value: 1)
         latch = Concurrent::CountDownLatch.new
 
@@ -178,13 +177,13 @@ module SecondaryActiveRecord
     end
 
     private
-
       def with_warning_suppression
-        log_level = SecondaryActiveRecord::Base.connection.client_min_messages
-        SecondaryActiveRecord::Base.connection.client_min_messages = "error"
+        log_level = ActiveRecord::Base.connection.client_min_messages
+        ActiveRecord::Base.connection.client_min_messages = "error"
         yield
       ensure
-        SecondaryActiveRecord::Base.connection.client_min_messages = log_level
+        ActiveRecord::Base.clear_active_connections!
+        ActiveRecord::Base.connection.client_min_messages = log_level
       end
   end
 end

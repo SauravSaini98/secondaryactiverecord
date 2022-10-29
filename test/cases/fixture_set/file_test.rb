@@ -3,9 +3,9 @@
 require "cases/helper"
 require "tempfile"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class FixtureSet
-    class FileTest < SecondaryActiveRecord::TestCase
+    class FileTest < ActiveRecord::TestCase
       def test_open
         fh = File.open(::File.join(FIXTURES_ROOT, "accounts.yml"))
         assert_equal 6, fh.to_a.length
@@ -56,7 +56,7 @@ module SecondaryActiveRecord
       # an exception is raised if the format is not valid Fixture format.
       def test_wrong_fixture_format_string
         tmp_yaml ["empty", "yml"], "qwerty" do |t|
-          assert_raises(SecondaryActiveRecord::Fixture::FormatError) do
+          assert_raises(ActiveRecord::Fixture::FormatError) do
             File.open(t.path) { |fh| fh.to_a }
           end
         end
@@ -64,14 +64,23 @@ module SecondaryActiveRecord
 
       def test_wrong_fixture_format_nested
         tmp_yaml ["empty", "yml"], "one: two" do |t|
-          assert_raises(SecondaryActiveRecord::Fixture::FormatError) do
+          assert_raises(ActiveRecord::Fixture::FormatError) do
             File.open(t.path) { |fh| fh.to_a }
           end
         end
       end
 
+      def test_wrong_config_row
+        tmp_yaml ["empty", "yml"], { "_fixture" => { "class_name" => "Foo" } }.to_yaml do |t|
+          error = assert_raises(ActiveRecord::Fixture::FormatError) do
+            File.open(t.path) { |fh| fh.model_class }
+          end
+          assert_includes error.message, "Invalid `_fixture` section"
+        end
+      end
+
       def test_render_context_helper
-        SecondaryActiveRecord::FixtureSet.context_class.class_eval do
+        ActiveRecord::FixtureSet.context_class.class_eval do
           def fixture_helper
             "Fixture helper"
           end
@@ -82,7 +91,7 @@ module SecondaryActiveRecord
               [["one", { "name" => "Fixture helper" }]]
           assert_equal golden, File.open(t.path) { |fh| fh.to_a }
         end
-        SecondaryActiveRecord::FixtureSet.context_class.class_eval do
+        ActiveRecord::FixtureSet.context_class.class_eval do
           remove_method :fixture_helper
         end
       end
@@ -90,15 +99,15 @@ module SecondaryActiveRecord
       def test_render_context_lookup_scope
         yaml = <<END
 one:
-  SecondaryActiveRecord: <%= defined? SecondaryActiveRecord %>
-  ActiveRecord_FixtureSet: <%= defined? SecondaryActiveRecord::FixtureSet %>
+  ActiveRecord: <%= defined? ActiveRecord %>
+  ActiveRecord_FixtureSet: <%= defined? ActiveRecord::FixtureSet %>
   FixtureSet: <%= defined? FixtureSet %>
-  ActiveRecord_FixtureSet_File: <%= defined? SecondaryActiveRecord::FixtureSet::File %>
+  ActiveRecord_FixtureSet_File: <%= defined? ActiveRecord::FixtureSet::File %>
   File: <%= File.name %>
 END
 
         golden = [["one", {
-          "SecondaryActiveRecord" => "constant",
+          "ActiveRecord" => "constant",
           "ActiveRecord_FixtureSet" => "constant",
           "FixtureSet" => nil,
           "ActiveRecord_FixtureSet_File" => "constant",
@@ -135,12 +144,6 @@ END
         File.open(::File.join(FIXTURES_ROOT, "other_posts.yml")) do |fh|
           assert_equal "Post", fh.model_class
         end
-      end
-
-      def test_erb_filename
-        filename = "filename.yaml"
-        erb = File.new(filename).send(:prepare_erb, "<% Rails.env %>\n")
-        assert_equal erb.filename, filename
       end
 
       private

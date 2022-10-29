@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class Entrant < SecondaryActiveRecord::Base
+class Entrant < ActiveRecord::Base
   belongs_to :course
 end

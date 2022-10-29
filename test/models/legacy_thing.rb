@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class LegacyThing < SecondaryActiveRecord::Base
+class LegacyThing < ActiveRecord::Base
   self.locking_column = :version
 end

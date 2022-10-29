@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class LoggerTest < SecondaryActiveRecord::TestCase
+    class LoggerTest < ActiveRecord::TestCase
       # MySQL can't roll back ddl changes
       self.use_transactional_tests = false
 
@@ -17,21 +17,22 @@ module SecondaryActiveRecord
 
       def setup
         super
-        SecondaryActiveRecord::SchemaMigration.create_table
-        SecondaryActiveRecord::SchemaMigration.delete_all
+        @schema_migration = ActiveRecord::Base.connection.schema_migration
+        @schema_migration.create_table
+        @schema_migration.delete_all
       end
 
       teardown do
-        SecondaryActiveRecord::SchemaMigration.drop_table
+        @schema_migration.drop_table
       end
 
       def test_migration_should_be_run_without_logger
-        previous_logger = SecondaryActiveRecord::Base.logger
-        SecondaryActiveRecord::Base.logger = nil
+        previous_logger = ActiveRecord::Base.logger
+        ActiveRecord::Base.logger = nil
         migrations = [Migration.new("a", 1), Migration.new("b", 2), Migration.new("c", 3)]
-        SecondaryActiveRecord::Migrator.new(:up, migrations).migrate
+        ActiveRecord::Migrator.new(:up, migrations, @schema_migration).migrate
       ensure
-        SecondaryActiveRecord::Base.logger = previous_logger
+        ActiveRecord::Base.logger = previous_logger
       end
     end
   end

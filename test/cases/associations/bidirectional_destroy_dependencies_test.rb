@@ -3,7 +3,7 @@
 require "cases/helper"
 require "models/content"
 
-class BidirectionalDestroyDependenciesTest < SecondaryActiveRecord::TestCase
+class BidirectionalDestroyDependenciesTest < ActiveRecord::TestCase
   fixtures :content, :content_positions
 
   def setup

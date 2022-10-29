@@ -11,7 +11,7 @@ require "models/reader"
 require "models/person"
 require "models/ship"
 
-class ReadOnlyTest < SecondaryActiveRecord::TestCase
+class ReadOnlyTest < ActiveRecord::TestCase
   fixtures :authors, :author_addresses, :posts, :comments, :developers, :projects, :developers_projects, :people, :readers
 
   def test_cant_save_readonly_record
@@ -23,23 +23,56 @@ class ReadOnlyTest < SecondaryActiveRecord::TestCase
 
     assert_nothing_raised do
       dev.name = "Luscious forbidden fruit."
-      assert !dev.save
+      assert_not dev.save
       dev.name = "Forbidden."
     end
 
-    e = assert_raise(SecondaryActiveRecord::ReadOnlyRecord) { dev.save  }
+    e = assert_raise(ActiveRecord::ReadOnlyRecord) { dev.save  }
     assert_equal "Developer is marked as readonly", e.message
 
-    e = assert_raise(SecondaryActiveRecord::ReadOnlyRecord) { dev.save! }
+    e = assert_raise(ActiveRecord::ReadOnlyRecord) { dev.save! }
     assert_equal "Developer is marked as readonly", e.message
 
-    e = assert_raise(SecondaryActiveRecord::ReadOnlyRecord) { dev.destroy }
+    e = assert_raise(ActiveRecord::ReadOnlyRecord) { dev.destroy }
+    assert_equal "Developer is marked as readonly", e.message
+  end
+
+  def test_cant_touch_readonly_record
+    dev = Developer.find(1)
+    assert_not_predicate dev, :readonly?
+
+    dev.readonly!
+    assert_predicate dev, :readonly?
+
+    e = assert_raise(ActiveRecord::ReadOnlyRecord) { dev.touch  }
+    assert_equal "Developer is marked as readonly", e.message
+  end
+
+  def test_cant_update_column_readonly_record
+    dev = Developer.find(1)
+    assert_not_predicate dev, :readonly?
+
+    dev.readonly!
+    assert_predicate dev, :readonly?
+
+    e = assert_raise(ActiveRecord::ReadOnlyRecord) { dev.update_column(:name, "New name")  }
+    assert_equal "Developer is marked as readonly", e.message
+  end
+
+  def test_cant_update_columns_readonly_record
+    dev = Developer.find(1)
+    assert_not_predicate dev, :readonly?
+
+    dev.readonly!
+    assert_predicate dev, :readonly?
+
+    e = assert_raise(ActiveRecord::ReadOnlyRecord) { dev.update_columns(name: "New name")  }
     assert_equal "Developer is marked as readonly", e.message
   end
 
   def test_find_with_readonly_option
-    Developer.all.each { |d| assert !d.readonly? }
-    Developer.readonly(false).each { |d| assert !d.readonly? }
+    Developer.all.each { |d| assert_not d.readonly? }
+    Developer.readonly(false).each { |d| assert_not d.readonly? }
     Developer.readonly(true).each { |d| assert d.readonly? }
     Developer.readonly.each { |d| assert d.readonly? }
   end
@@ -55,14 +88,14 @@ class ReadOnlyTest < SecondaryActiveRecord::TestCase
   def test_has_many_find_readonly
     post = Post.find(1)
     assert_not_empty post.comments
-    assert !post.comments.any?(&:readonly?)
-    assert !post.comments.to_a.any?(&:readonly?)
+    assert_not post.comments.any?(&:readonly?)
+    assert_not post.comments.to_a.any?(&:readonly?)
     assert post.comments.readonly(true).all?(&:readonly?)
   end
 
   def test_has_many_with_through_is_not_implicitly_marked_readonly
     assert people = Post.find(1).people
-    assert !people.any?(&:readonly?)
+    assert_not people.any?(&:readonly?)
   end
 
   def test_has_many_with_through_is_not_implicitly_marked_readonly_while_finding_by_id

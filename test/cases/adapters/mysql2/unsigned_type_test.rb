@@ -3,15 +3,15 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class Mysql2UnsignedTypeTest < SecondaryActiveRecord::Mysql2TestCase
+class Mysql2UnsignedTypeTest < ActiveRecord::Mysql2TestCase
   include SchemaDumpingHelper
   self.use_transactional_tests = false
 
-  class UnsignedType < SecondaryActiveRecord::Base
+  class UnsignedType < ActiveRecord::Base
   end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("unsigned_types", force: true) do |t|
       t.integer :unsigned_integer, unsigned: true
       t.bigint  :unsigned_bigint,  unsigned: true
@@ -37,10 +37,10 @@ class Mysql2UnsignedTypeTest < SecondaryActiveRecord::Mysql2TestCase
     assert_raise(ActiveModel::RangeError) do
       UnsignedType.create(unsigned_bigint: -10)
     end
-    assert_raise(SecondaryActiveRecord::RangeError) do
+    assert_raise(ActiveRecord::RangeError) do
       UnsignedType.create(unsigned_float: -10.0)
     end
-    assert_raise(SecondaryActiveRecord::RangeError) do
+    assert_raise(ActiveRecord::RangeError) do
       UnsignedType.create(unsigned_decimal: -10.0)
     end
   end

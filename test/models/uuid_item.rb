@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class UuidItem < SecondaryActiveRecord::Base
+class UuidItem < ActiveRecord::Base
 end
 
 class UuidValidatingItem < UuidItem

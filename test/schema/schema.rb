@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-SecondaryActiveRecord::Schema.define do
+ActiveRecord::Schema.define do
   # ------------------------------------------------------------------- #
   #                                                                     #
   #   Please keep these create table statements in alphabetical order   #
@@ -8,10 +8,15 @@ SecondaryActiveRecord::Schema.define do
   #                                                                     #
   # ------------------------------------------------------------------- #
 
+  create_table :"1_need_quoting", force: true do |t|
+    t.string :name
+  end
+
   create_table :accounts, force: true do |t|
     t.references :firm, index: false
     t.string  :firm_name
     t.integer :credit_limit
+    t.integer "a" * max_identifier_length
   end
 
   create_table :admin_accounts, force: true do |t|
@@ -21,6 +26,24 @@ SecondaryActiveRecord::Schema.define do
   create_table :admin_users, force: true do |t|
     t.string :name
     t.string :settings, null: true, limit: 1024
+    t.string :parent, null: true, limit: 1024
+    t.string :spouse, null: true, limit: 1024
+    t.string :configs, null: true, limit: 1024
+    # MySQL does not allow default values for blobs. Fake it out with a
+    # big varchar below.
+    t.string :preferences, null: true, default: "", limit: 1024
+    t.string :json_data, null: true, limit: 1024
+    t.string :json_data_empty, null: true, default: "", limit: 1024
+    t.text :params
+    t.references :account
+  end
+
+  create_table :admin_user_jsons, force: true do |t|
+    t.string :name
+    t.string :settings, null: true, limit: 1024
+    t.string :parent, null: true, limit: 1024
+    t.string :spouse, null: true, limit: 1024
+    t.string :configs, null: true, limit: 1024
     # MySQL does not allow default values for blobs. Fake it out with a
     # big varchar below.
     t.string :preferences, null: true, default: "", limit: 1024
@@ -34,6 +57,7 @@ SecondaryActiveRecord::Schema.define do
     t.string :name
     t.integer :wheels_count, default: 0, null: false
     t.datetime :wheels_owned_at
+    t.timestamp :manufactured_at, default: -> { "CURRENT_TIMESTAMP" }
   end
 
   create_table :articles, force: true do |t|
@@ -47,6 +71,10 @@ SecondaryActiveRecord::Schema.define do
   create_table :articles_tags, force: true do |t|
     t.references :article
     t.references :tag
+  end
+
+  create_table :attachments, force: true do |t|
+    t.references :record, polymorphic: true, null: false
   end
 
   create_table :audit_logs, force: true do |t|
@@ -82,6 +110,7 @@ SecondaryActiveRecord::Schema.define do
     t.string :name
     t.binary :data
     t.binary :short_data, limit: 2048
+    t.blob :blob_data
   end
 
   create_table :birds, force: true do |t|
@@ -90,24 +119,57 @@ SecondaryActiveRecord::Schema.define do
     t.integer :pirate_id
   end
 
-  create_table :books, force: true do |t|
+  create_table :books, id: :integer, force: true do |t|
+    default_zero = { default: 0 }
     t.references :author
     t.string :format
     t.column :name, :string
-    t.column :status, :integer, default: 0
-    t.column :read_status, :integer, default: 0
+    t.column :status, :integer, **default_zero
+    t.column :last_read, :integer, **default_zero
     t.column :nullable_status, :integer
-    t.column :language, :integer, default: 0
-    t.column :author_visibility, :integer, default: 0
-    t.column :illustrator_visibility, :integer, default: 0
-    t.column :font_size, :integer, default: 0
-    t.column :difficulty, :integer, default: 0
+    t.column :language, :integer, **default_zero
+    t.column :author_visibility, :integer, **default_zero
+    t.column :illustrator_visibility, :integer, **default_zero
+    t.column :font_size, :integer, **default_zero
+    t.column :difficulty, :integer, **default_zero
     t.column :cover, :string, default: "hard"
+    t.string :isbn
+    t.string :external_id
+    t.column :original_name, :string
+    t.datetime :published_on
+    t.boolean :boolean_status
+    t.index [:author_id, :name], unique: true
+    t.integer :tags_count, default: 0
+    t.index :isbn, where: "published_on IS NOT NULL", unique: true
+    t.index "(lower(external_id))", unique: true if supports_expression_index?
+
+    if supports_datetime_with_precision?
+      t.datetime :created_at, precision: 6
+      t.datetime :updated_at, precision: 6
+    else
+      t.datetime :created_at
+      t.datetime :updated_at
+    end
+    t.date :updated_on
+  end
+
+  create_table :encrypted_books, id: :integer, force: true do |t|
+    t.references :author
+    t.string :format
+    t.column :name, :string
+    t.column :original_name, :string
+
+    t.datetime :created_at
+    t.datetime :updated_at
   end
 
   create_table :booleans, force: true do |t|
     t.boolean :value
     t.boolean :has_fun, null: false, default: false
+  end
+
+  create_table :branches, force: true do |t|
+    t.references :branch
   end
 
   create_table :bulbs, primary_key: "ID", force: true do |t|
@@ -135,13 +197,23 @@ SecondaryActiveRecord::Schema.define do
 
   create_table :carriers, force: true
 
+  create_table :carts, force: true, primary_key: [:shop_id, :id] do |t|
+    if current_adapter?(:Mysql2Adapter)
+      t.bigint :id, index: true, auto_increment: true, null: false
+    else
+      t.bigint :id, index: true, null: false
+    end
+    t.bigint :shop_id
+    t.string :title
+  end
+
   create_table :categories, force: true do |t|
     t.string :name, null: false
     t.string :type
     t.integer :categorizations_count
   end
 
-  create_table :categories_posts, force: true, id: false do |t|
+  create_table :categories_posts, force: true do |t|
     t.integer :category_id, null: false
     t.integer :post_id, null: false
   end
@@ -155,8 +227,9 @@ SecondaryActiveRecord::Schema.define do
   end
 
   create_table :citations, force: true do |t|
-    t.column :book1_id, :integer
-    t.column :book2_id, :integer
+    t.references :book1
+    t.references :book2
+    t.references :citation
   end
 
   create_table :clubs, force: true do |t|
@@ -186,16 +259,22 @@ SecondaryActiveRecord::Schema.define do
       t.text    :body, null: false
     end
     t.string  :type
+    t.integer :label, default: 0
     t.integer :tags_count, default: 0
     t.integer :children_count, default: 0
     t.integer :parent_id
     t.references :author, polymorphic: true
+    # The type of the attribute is a string to make sure preload work when types don't match.
+    # See #14855.
     t.string :resource_id
     t.string :resource_type
+    t.integer :origin_id
+    t.string :origin_type
     t.integer :developer_id
     t.datetime :updated_at
     t.datetime :deleted_at
     t.integer :comments
+    t.integer :company
   end
 
   create_table :companies, force: true do |t|
@@ -212,11 +291,13 @@ SecondaryActiveRecord::Schema.define do
     t.index [:firm_id, :type, :rating], name: "company_index", length: { type: 10 }, order: { rating: :desc }
     t.index [:firm_id, :type], name: "company_partial_index", where: "(rating > 10)"
     t.index :name, name: "company_name_index", using: :btree
-    t.index "(CASE WHEN rating > 0 THEN lower(name) END)", name: "company_expression_index" if supports_expression_index?
+    t.index "(CASE WHEN rating > 0 THEN lower(name) END) DESC", name: "company_expression_index" if supports_expression_index?
   end
 
   create_table :content, force: true do |t|
     t.string :title
+    t.belongs_to :book
+    t.belongs_to :book_destroy_async
   end
 
   create_table :content_positions, force: true do |t|
@@ -233,16 +314,21 @@ SecondaryActiveRecord::Schema.define do
     t.string :system
     t.integer :developer, null: false
     t.integer :extendedWarranty, null: false
+    t.integer :timezone
+    t.timestamps
   end
 
   create_table :computers_developers, id: false, force: true do |t|
     t.references :computer
     t.references :developer
+    t.timestamps
   end
 
   create_table :contracts, force: true do |t|
     t.references :developer, index: false
     t.references :company, index: false
+    t.string :metadata
+    t.integer :count
   end
 
   create_table :customers, force: true do |t|
@@ -264,22 +350,69 @@ SecondaryActiveRecord::Schema.define do
     t.string :name
   end
 
+  create_table :destroy_async_parents, force: true, id: false do |t|
+    t.primary_key :parent_id
+    t.string :name
+    t.integer :tags_count, default: 0
+  end
+
+  create_table :destroy_async_parent_soft_deletes, force: true do |t|
+    t.integer :tags_count, default: 0
+    t.boolean :deleted
+  end
+
+  create_table :discounts, force: true do |t|
+    t.integer :amount
+  end
+
+  create_table :dl_keyed_belongs_tos, force: true, id: false do |t|
+    t.primary_key :belongs_key
+    t.references :destroy_async_parent
+  end
+
+  create_table :dl_keyed_belongs_to_soft_deletes, force: true do |t|
+    t.references :destroy_async_parent_soft_delete, index: { name: :soft_del_parent }
+    t.boolean :deleted
+  end
+
+  create_table :dl_keyed_has_ones, force: true, id: false do |t|
+    t.primary_key :has_one_key
+
+    t.references :destroy_async_parent
+    t.references :destroy_async_parent_soft_delete
+  end
+
+  create_table :dl_keyed_has_manies, force: true, id: false do |t|
+    t.primary_key :many_key
+    t.references :destroy_async_parent
+  end
+
+  create_table :dl_keyed_has_many_throughs, force: true, id: false do |t|
+    t.primary_key :through_key
+  end
+
+  create_table :dl_keyed_joins, force: true, id: false do |t|
+    t.primary_key :joins_key
+    t.references :destroy_async_parent
+    t.references :dl_keyed_has_many_through
+  end
+
   create_table :developers, force: true do |t|
     t.string   :name
     t.string   :first_name
     t.integer  :salary, default: 70000
     t.references :firm, index: false
     t.integer :mentor_id
-    if subsecond_precision_supported?
-      t.datetime :created_at, precision: 6
-      t.datetime :updated_at, precision: 6
-      t.datetime :created_on, precision: 6
-      t.datetime :updated_on, precision: 6
+    if supports_datetime_with_precision?
+      t.datetime :legacy_created_at, precision: 6
+      t.datetime :legacy_updated_at, precision: 6
+      t.datetime :legacy_created_on, precision: 6
+      t.datetime :legacy_updated_on, precision: 6
     else
-      t.datetime :created_at
-      t.datetime :updated_at
-      t.datetime :created_on
-      t.datetime :updated_on
+      t.datetime :legacy_created_at
+      t.datetime :legacy_updated_at
+      t.datetime :legacy_created_on
+      t.datetime :legacy_updated_on
     end
   end
 
@@ -323,12 +456,19 @@ SecondaryActiveRecord::Schema.define do
     t.integer :course_id, null: false
   end
 
+  create_table :entries, force: true do |t|
+    t.string  :entryable_type, null: false
+    t.integer :entryable_id, null: false
+  end
+
   create_table :essays, force: true do |t|
+    t.string :type
     t.string :name
     t.string :writer_id
     t.string :writer_type
     t.string :category_id
     t.string :author_id
+    t.references :book
   end
 
   create_table :events, force: true do |t|
@@ -396,7 +536,7 @@ SecondaryActiveRecord::Schema.define do
 
   create_table :invoices, force: true do |t|
     t.integer :balance
-    if subsecond_precision_supported?
+    if supports_datetime_with_precision?
       t.datetime :updated_at, precision: 6
     else
       t.datetime :updated_at
@@ -458,6 +598,11 @@ SecondaryActiveRecord::Schema.define do
     t.integer :amount
   end
 
+  create_table :line_item_discount_applications, force: true do |t|
+    t.integer :line_item_id
+    t.integer :discount_id
+  end
+
   create_table :lions, force: true do |t|
     t.integer :gender
     t.boolean :is_vegetarian, default: false
@@ -504,8 +649,10 @@ SecondaryActiveRecord::Schema.define do
   create_table :memberships, force: true do |t|
     t.datetime :joined_on
     t.integer :club_id, :member_id
-    t.boolean :favourite, default: false
+    t.boolean :favorite, default: false
     t.integer :type
+    t.datetime :created_at
+    t.datetime :updated_at
   end
 
   create_table :member_types, force: true do |t|
@@ -514,6 +661,10 @@ SecondaryActiveRecord::Schema.define do
 
   create_table :mentors, force: true do |t|
     t.string :name
+  end
+
+  create_table :messages, force: true do |t|
+    t.string :subject
   end
 
   create_table :minivans, force: true, id: false do |t|
@@ -542,6 +693,10 @@ SecondaryActiveRecord::Schema.define do
     t.string   :type
   end
 
+  create_table :mice, force: true do |t|
+    t.string   :name
+  end
+
   create_table :movies, force: true, id: false do |t|
     t.primary_key :movieid
     t.string      :name
@@ -554,15 +709,17 @@ SecondaryActiveRecord::Schema.define do
   create_table :numeric_data, force: true do |t|
     t.decimal :bank_balance, precision: 10, scale: 2
     t.decimal :big_bank_balance, precision: 15, scale: 2
-    t.decimal :world_population, precision: 10, scale: 0
+    t.decimal :unscaled_bank_balance, precision: 10
+    t.decimal :world_population, precision: 20, scale: 0
     t.decimal :my_house_population, precision: 2, scale: 0
+    t.decimal :decimal_number
     t.decimal :decimal_number_with_default, precision: 3, scale: 2, default: 2.78
+    t.numeric :numeric_number
     t.float   :temperature
+    t.decimal :decimal_number_big_precision, precision: 20
     # Oracle/SQLServer supports precision up to 38
     if current_adapter?(:OracleAdapter, :SQLServerAdapter)
       t.decimal :atoms_in_universe, precision: 38, scale: 0
-    elsif current_adapter?(:FbAdapter)
-      t.decimal :atoms_in_universe, precision: 18, scale: 0
     else
       t.decimal :atoms_in_universe, precision: 55, scale: 0
     end
@@ -580,7 +737,7 @@ SecondaryActiveRecord::Schema.define do
 
   create_table :owners, primary_key: :owner_id, force: true do |t|
     t.string :name
-    if subsecond_precision_supported?
+    if supports_datetime_with_precision?
       t.column :updated_at, :datetime, precision: 6
     else
       t.column :updated_at, :datetime
@@ -597,33 +754,63 @@ SecondaryActiveRecord::Schema.define do
     t.integer :non_poly_two_id
   end
 
-  create_table :parrots, force: true do |t|
-    t.column :name, :string
-    t.column :color, :string
-    t.column :parrot_sti_class, :string
-    t.column :killer_id, :integer
-    t.column :updated_count, :integer, default: 0
-    if subsecond_precision_supported?
-      t.column :created_at, :datetime, precision: 0
-      t.column :created_on, :datetime, precision: 0
-      t.column :updated_at, :datetime, precision: 0
-      t.column :updated_on, :datetime, precision: 0
-    else
-      t.column :created_at, :datetime
-      t.column :created_on, :datetime
-      t.column :updated_at, :datetime
-      t.column :updated_on, :datetime
+  disable_referential_integrity do
+    create_table :parrots, force: :cascade do |t|
+      t.string :name
+      t.integer :breed, default: 0
+      t.string :color
+      t.string :parrot_sti_class
+      t.integer :killer_id
+      t.integer :updated_count, :integer, default: 0
+      if supports_datetime_with_precision?
+        t.datetime :created_at, precision: 0
+        t.datetime :created_on, precision: 0
+        t.datetime :updated_at, precision: 0
+        t.datetime :updated_on, precision: 0
+      else
+        t.datetime :created_at
+        t.datetime :created_on
+        t.datetime :updated_at
+        t.datetime :updated_on
+      end
     end
-  end
 
-  create_table :parrots_pirates, id: false, force: true do |t|
-    t.column :parrot_id, :integer
-    t.column :pirate_id, :integer
-  end
+    create_table :pirates, force: :cascade do |t|
+      t.string :catchphrase
+      t.integer :parrot_id
+      t.integer :non_validated_parrot_id
+      if supports_datetime_with_precision?
+        t.datetime :created_on, precision: 6
+        t.datetime :updated_on, precision: 6
+      else
+        t.datetime :created_on
+        t.datetime :updated_on
+      end
+    end
 
-  create_table :parrots_treasures, id: false, force: true do |t|
-    t.column :parrot_id, :integer
-    t.column :treasure_id, :integer
+    create_table :treasures, force: :cascade do |t|
+      t.string :name
+      t.string :type
+      t.references :looter, polymorphic: true
+      t.references :ship
+    end
+
+    create_table :parrots_pirates, id: false, force: true do |t|
+      t.references :parrot, foreign_key: true
+      t.references :pirate, foreign_key: true
+    end
+
+    # used by tests that do `Parrot.has_and_belongs_to_many :treasures` (the default)
+    create_table :parrots_treasures, id: false, force: true do |t|
+      t.references :parrot, foreign_key: true
+      t.references :treasure, foreign_key: true
+    end
+
+    # used by tests that do `Parrot.has_many :treasures, through: :parrot_treasures`, and don't want to override the through relation's `table_name`
+    create_table :parrot_treasures, id: false, force: true do |t|
+      t.references :parrot, foreign_key: true
+      t.references :treasure, foreign_key: true
+    end
   end
 
   create_table :people, force: true do |t|
@@ -656,30 +843,13 @@ SecondaryActiveRecord::Schema.define do
   create_table :pets, primary_key: :pet_id, force: true do |t|
     t.string :name
     t.integer :owner_id, :integer
-    if subsecond_precision_supported?
-      t.timestamps null: false, precision: 6
-    else
-      t.timestamps null: false
-    end
+    t.timestamps
   end
 
   create_table :pets_treasures, force: true do |t|
     t.column :treasure_id, :integer
     t.column :pet_id, :integer
     t.column :rainbow_color, :string
-  end
-
-  create_table :pirates, force: true do |t|
-    t.column :catchphrase, :string
-    t.column :parrot_id, :integer
-    t.integer :non_validated_parrot_id
-    if subsecond_precision_supported?
-      t.column :created_on, :datetime, precision: 6
-      t.column :updated_on, :datetime, precision: 6
-    else
-      t.column :created_on, :datetime
-      t.column :updated_on, :datetime
-    end
   end
 
   create_table :posts, force: true do |t|
@@ -693,13 +863,18 @@ SecondaryActiveRecord::Schema.define do
       t.text    :body, null: false
     end
     t.string  :type
-    t.integer :comments_count, default: 0
+    t.integer :legacy_comments_count, default: 0
     t.integer :taggings_with_delete_all_count, default: 0
     t.integer :taggings_with_destroy_count, default: 0
     t.integer :tags_count, default: 0
     t.integer :indestructible_tags_count, default: 0
     t.integer :tags_with_destroy_count, default: 0
     t.integer :tags_with_nullify_count, default: 0
+  end
+
+  create_table :postesques, force: true do |t|
+    t.string :author_name
+    t.string :author_id
   end
 
   create_table :serialized_posts, force: true do |t|
@@ -716,13 +891,18 @@ SecondaryActiveRecord::Schema.define do
     t.string :estimate_of_type
     t.integer :estimate_of_id
     t.integer :price
+    t.string :currency
   end
 
   create_table :products, force: true do |t|
     t.references :collection
     t.references :type
-    t.string     :name
+    t.string :name
+    t.decimal :price
+    t.decimal :discounted_price
   end
+
+  add_check_constraint :products, "price > discounted_price", name: "products_price_check"
 
   create_table :product_types, force: true do |t|
     t.string :name
@@ -765,8 +945,31 @@ SecondaryActiveRecord::Schema.define do
   create_table :references, force: true do |t|
     t.integer :person_id
     t.integer :job_id
-    t.boolean :favourite
+    t.boolean :favorite
     t.integer :lock_version, default: 0
+  end
+
+  create_table :rooms, force: true do |t|
+    t.references :user
+    t.references :owner
+  end
+
+  disable_referential_integrity do
+    create_table :seminars, force: :cascade do |t|
+      t.string :name
+    end
+
+    create_table :sessions, force: :cascade do |t|
+      t.date :start_date
+      t.date :end_date
+      t.string :name
+    end
+
+    create_table :sections, force: :cascade do |t|
+      t.string :short_name
+      t.belongs_to :session, foreign_key: true
+      t.belongs_to :seminar, foreign_key: true
+    end
   end
 
   create_table :shape_expressions, force: true do |t|
@@ -774,6 +977,16 @@ SecondaryActiveRecord::Schema.define do
     t.integer :paint_id
     t.string  :shape_type
     t.integer :shape_id
+  end
+
+  create_table :shipping_lines, force: true do |t|
+    t.integer :invoice_id
+    t.integer :amount
+  end
+
+  create_table :shipping_line_discount_applications, force: true do |t|
+    t.integer :shipping_line_id
+    t.integer :discount_id
   end
 
   create_table :ships, force: true do |t|
@@ -792,11 +1005,15 @@ SecondaryActiveRecord::Schema.define do
   create_table :ship_parts, force: true do |t|
     t.string :name
     t.integer :ship_id
-    if subsecond_precision_supported?
+    if supports_datetime_with_precision?
       t.datetime :updated_at, precision: 6
     else
       t.datetime :updated_at
     end
+  end
+
+  create_table :squeaks, force: true do |t|
+    t.integer :mouse_id
   end
 
   create_table :prisoners, force: true do |t|
@@ -868,7 +1085,7 @@ SecondaryActiveRecord::Schema.define do
     t.string   :title, limit: 250
     t.string   :author_name
     t.string   :author_email_address
-    if subsecond_precision_supported?
+    if supports_datetime_with_precision?
       t.datetime :written_on, precision: 6
     else
       t.datetime :written_on
@@ -891,11 +1108,8 @@ SecondaryActiveRecord::Schema.define do
     t.string   :parent_title
     t.string   :type
     t.string   :group
-    if subsecond_precision_supported?
-      t.timestamps null: true, precision: 6
-    else
-      t.timestamps null: true
-    end
+    t.timestamps null: true
+    t.index [:author_name, :title]
   end
 
   create_table :toys, primary_key: :toy_id, force: true do |t|
@@ -912,12 +1126,11 @@ SecondaryActiveRecord::Schema.define do
     t.datetime :updated_at
   end
 
-  create_table :treasures, force: true do |t|
-    t.column :name, :string
-    t.column :type, :string
-    t.column :looter_id, :integer
-    t.column :looter_type, :string
-    t.belongs_to :ship
+  create_table :translations, force: true do |t|
+    t.string :locale, null: false
+    t.string :key, null: false
+    t.string :value, null: false
+    t.references :attachment
   end
 
   create_table :tuning_pegs, force: true do |t|
@@ -927,6 +1140,13 @@ SecondaryActiveRecord::Schema.define do
 
   create_table :tyres, force: true do |t|
     t.integer :car_id
+  end
+
+  create_table :unused_destroy_asyncs, force: true do |t|
+  end
+
+  create_table :unused_belongs_to, force: true do |t|
+    t.belongs_to :unused_destroy_async
   end
 
   create_table :variants, force: true do |t|
@@ -943,34 +1163,38 @@ SecondaryActiveRecord::Schema.define do
   end
 
   [:circles, :squares, :triangles, :non_poly_ones, :non_poly_twos].each do |t|
-    create_table(t, force: true) {}
+    create_table(t, force: true) { }
   end
 
-  create_table :men, force: true do |t|
+  create_table :humans, force: true do |t|
     t.string  :name
   end
 
   create_table :faces, force: true do |t|
     t.string  :description
-    t.integer :man_id
-    t.integer :polymorphic_man_id
-    t.string  :polymorphic_man_type
-    t.integer :poly_man_without_inverse_id
-    t.string  :poly_man_without_inverse_type
-    t.integer :horrible_polymorphic_man_id
-    t.string  :horrible_polymorphic_man_type
-    t.references :human, polymorphic: true, index: false
+    t.integer :human_id
+    t.integer :polymorphic_human_id
+    t.string  :polymorphic_human_type
+    t.integer :poly_human_without_inverse_id
+    t.string  :poly_human_without_inverse_type
+    t.integer :puzzled_polymorphic_human_id
+    t.string  :puzzled_polymorphic_human_type
+    t.references :super_human, polymorphic: true, index: false
   end
 
   create_table :interests, force: true do |t|
     t.string :topic
-    t.integer :man_id
-    t.integer :polymorphic_man_id
-    t.string :polymorphic_man_type
+    t.integer :human_id
+    t.integer :polymorphic_human_id
+    t.string :polymorphic_human_type
     t.integer :zine_id
   end
 
   create_table :zines, force: true do |t|
+    t.string :title
+  end
+
+  create_table :strict_zines, force: true do |t|
     t.string :title
   end
 
@@ -979,14 +1203,16 @@ SecondaryActiveRecord::Schema.define do
     t.references :wheelable, polymorphic: true
   end
 
-  create_table :countries, force: true, id: false, primary_key: "country_id" do |t|
-    t.string :country_id
+  create_table :countries, force: true, id: false do |t|
+    t.string :country_id, primary_key: true
     t.string :name
   end
-  create_table :treaties, force: true, id: false, primary_key: "treaty_id" do |t|
-    t.string :treaty_id
+
+  create_table :treaties, force: true, id: false do |t|
+    t.string :treaty_id, primary_key: true
     t.string :name
   end
+
   create_table :countries_treaties, force: true, primary_key: [:country_id, :treaty_id] do |t|
     t.string :country_id, null: false
     t.string :treaty_id, null: false
@@ -1028,6 +1254,7 @@ SecondaryActiveRecord::Schema.define do
   create_table :cake_designers, force: true do |t|
   end
   create_table :drink_designers, force: true do |t|
+    t.string :name
   end
   create_table :chefs, force: true do |t|
     t.integer :employable_id
@@ -1035,6 +1262,7 @@ SecondaryActiveRecord::Schema.define do
     t.integer :department_id
     t.string :employable_list_type
     t.integer :employable_list_id
+    t.timestamps
   end
   create_table :recipes, force: true do |t|
     t.integer :chef_id
@@ -1054,11 +1282,23 @@ SecondaryActiveRecord::Schema.define do
     end
   end
 
+  disable_referential_integrity do
+    create_table :fk_object_to_point_tos, force: :cascade do |t|
+    end
+
+    create_table :fk_pointing_to_non_existent_objects, force: true do |t|
+      t.references :fk_object_to_point_to, null: false, index: false
+      t.foreign_key :fk_object_to_point_tos, column: "fk_object_to_point_to_id", name: "fk_that_will_be_broken"
+    end
+  end
+
   create_table :overloaded_types, force: true do |t|
     t.float :overloaded_float, default: 500
     t.float :unoverloaded_float
     t.string :overloaded_string_with_limit, limit: 255
     t.string :string_with_default, default: "the original default"
+    t.string :inferred_string, limit: 255
+    t.datetime :starts_at, :ends_at
   end
 
   create_table :users, force: true do |t|
@@ -1072,6 +1312,12 @@ SecondaryActiveRecord::Schema.define do
 
   create_table :non_primary_keys, force: true, id: false do |t|
     t.integer :id
+    t.datetime :created_at
+  end
+
+  create_table :toooooooooooooooooooooooooooooooooo_long_table_names, force: true do |t|
+    t.bigint :toooooooo_long_a_id, null: false
+    t.bigint :toooooooo_long_b_id, null: false
   end
 end
 

@@ -2,27 +2,27 @@
 
 require "cases/helper"
 require "models/post"
-require "secondary_active_record/relation/record_fetch_warning"
+require "active_record/relation/record_fetch_warning"
 
-module SecondaryActiveRecord
-  class RecordFetchWarningTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class RecordFetchWarningTest < ActiveRecord::TestCase
     fixtures :posts
 
     def setup
-      @original_logger = SecondaryActiveRecord::Base.logger
-      @original_warn_on_records_fetched_greater_than = SecondaryActiveRecord::Base.warn_on_records_fetched_greater_than
+      @original_logger = ActiveRecord::Base.logger
+      @original_warn_on_records_fetched_greater_than = ActiveRecord.warn_on_records_fetched_greater_than
       @log = StringIO.new
     end
 
     def teardown
-      SecondaryActiveRecord::Base.logger = @original_logger
-      SecondaryActiveRecord::Base.warn_on_records_fetched_greater_than = @original_warn_on_records_fetched_greater_than
+      ActiveRecord::Base.logger = @original_logger
+      ActiveRecord.warn_on_records_fetched_greater_than = @original_warn_on_records_fetched_greater_than
     end
 
     def test_warn_on_records_fetched_greater_than_allowed_limit
-      SecondaryActiveRecord::Base.logger = ActiveSupport::Logger.new(@log)
-      SecondaryActiveRecord::Base.logger.level = Logger::WARN
-      SecondaryActiveRecord::Base.warn_on_records_fetched_greater_than = 1
+      ActiveRecord::Base.logger = ActiveSupport::Logger.new(@log)
+      ActiveRecord::Base.logger.level = Logger::WARN
+      ActiveRecord.warn_on_records_fetched_greater_than = 1
 
       Post.all.to_a
 
@@ -30,9 +30,9 @@ module SecondaryActiveRecord
     end
 
     def test_does_not_warn_on_records_fetched_less_than_allowed_limit
-      SecondaryActiveRecord::Base.logger = ActiveSupport::Logger.new(@log)
-      SecondaryActiveRecord::Base.logger.level = Logger::WARN
-      SecondaryActiveRecord::Base.warn_on_records_fetched_greater_than = 100
+      ActiveRecord::Base.logger = ActiveSupport::Logger.new(@log)
+      ActiveRecord::Base.logger.level = Logger::WARN
+      ActiveRecord.warn_on_records_fetched_greater_than = 100
 
       Post.all.to_a
 

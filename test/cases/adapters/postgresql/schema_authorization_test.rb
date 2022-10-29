@@ -2,10 +2,10 @@
 
 require "cases/helper"
 
-class SchemaThing < SecondaryActiveRecord::Base
+class SchemaThing < ActiveRecord::Base
 end
 
-class SchemaAuthorizationTest < SecondaryActiveRecord::PostgreSQLTestCase
+class SchemaAuthorizationTest < ActiveRecord::PostgreSQLTestCase
   self.use_transactional_tests = false
 
   TABLE_NAME = "schema_things"
@@ -16,7 +16,7 @@ class SchemaAuthorizationTest < SecondaryActiveRecord::PostgreSQLTestCase
   USERS = ["rails_pg_schema_user1", "rails_pg_schema_user2"]
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.execute "SET search_path TO '$user',public"
     set_session_auth
     USERS.each do |u|
@@ -39,14 +39,14 @@ class SchemaAuthorizationTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_schema_invisible
-    assert_raise(SecondaryActiveRecord::StatementInvalid) do
+    assert_raise(ActiveRecord::StatementInvalid) do
       set_session_auth
       @connection.execute "SELECT * FROM #{TABLE_NAME}"
     end
   end
 
   def test_session_auth=
-    assert_raise(SecondaryActiveRecord::StatementInvalid) do
+    assert_raise(ActiveRecord::StatementInvalid) do
       @connection.session_auth = "DEFAULT"
       @connection.execute "SELECT * FROM #{TABLE_NAME}"
     end
@@ -63,7 +63,7 @@ class SchemaAuthorizationTest < SecondaryActiveRecord::PostgreSQLTestCase
     end
   end
 
-  if SecondaryActiveRecord::Base.connection.prepared_statements
+  if ActiveRecord::Base.connection.prepared_statements
     def test_auth_with_bind
       assert_nothing_raised do
         set_session_auth
@@ -105,6 +105,6 @@ class SchemaAuthorizationTest < SecondaryActiveRecord::PostgreSQLTestCase
     end
 
     def bind_param(value)
-      SecondaryActiveRecord::Relation::QueryAttribute.new(nil, value, SecondaryActiveRecord::Type::Value.new)
+      ActiveRecord::Relation::QueryAttribute.new(nil, value, ActiveRecord::Type::Value.new)
     end
 end

@@ -14,53 +14,54 @@ module Remembered
 
   included do
     after_create :remember
+
   private
     def remember; self.class.remembered << self; end
   end
 
   module ClassMethods
-    def remembered; @@remembered ||= []; end
-    def sample; @@remembered.sample; end
+    def remembered; @remembered ||= []; end
+    def sample; remembered.sample; end
   end
 end
 
-class ShapeExpression < SecondaryActiveRecord::Base
+class ShapeExpression < ActiveRecord::Base
   belongs_to :shape, polymorphic: true
   belongs_to :paint, polymorphic: true
 end
 
-class Circle < SecondaryActiveRecord::Base
+class Circle < ActiveRecord::Base
   has_many :shape_expressions, as: :shape
   include Remembered
 end
-class Square < SecondaryActiveRecord::Base
+class Square < ActiveRecord::Base
   has_many :shape_expressions, as: :shape
   include Remembered
 end
-class Triangle < SecondaryActiveRecord::Base
+class Triangle < ActiveRecord::Base
   has_many :shape_expressions, as: :shape
   include Remembered
 end
-class PaintColor < SecondaryActiveRecord::Base
+class PaintColor < ActiveRecord::Base
   has_many   :shape_expressions, as: :paint
   belongs_to :non_poly, foreign_key: "non_poly_one_id", class_name: "NonPolyOne"
   include Remembered
 end
-class PaintTexture < SecondaryActiveRecord::Base
+class PaintTexture < ActiveRecord::Base
   has_many   :shape_expressions, as: :paint
   belongs_to :non_poly, foreign_key: "non_poly_two_id", class_name: "NonPolyTwo"
   include Remembered
 end
-class NonPolyOne < SecondaryActiveRecord::Base
+class NonPolyOne < ActiveRecord::Base
   has_many :paint_colors
   include Remembered
 end
-class NonPolyTwo < SecondaryActiveRecord::Base
+class NonPolyTwo < ActiveRecord::Base
   has_many :paint_textures
   include Remembered
 end
 
-class EagerLoadPolyAssocsTest < SecondaryActiveRecord::TestCase
+class EagerLoadPolyAssocsTest < ActiveRecord::TestCase
   NUM_SIMPLE_OBJS = 50
   NUM_SHAPE_EXPRESSIONS = 100
 
@@ -92,7 +93,7 @@ class EagerLoadPolyAssocsTest < SecondaryActiveRecord::TestCase
   def test_include_query
     res = ShapeExpression.all.merge!(includes: [ :shape, { paint: :non_poly } ]).to_a
     assert_equal NUM_SHAPE_EXPRESSIONS, res.size
-    assert_queries(0) do
+    assert_no_queries do
       res.each do |se|
         assert_not_nil se.paint.non_poly, "this is the association that was loading incorrectly before the change"
         assert_not_nil se.shape, "just making sure other associations still work"
@@ -101,19 +102,19 @@ class EagerLoadPolyAssocsTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class EagerLoadNestedIncludeWithMissingDataTest < SecondaryActiveRecord::TestCase
+class EagerLoadNestedIncludeWithMissingDataTest < ActiveRecord::TestCase
   def setup
     @davey_mcdave = Author.create(name: "Davey McDave")
     @first_post = @davey_mcdave.posts.create(title: "Davey Speaks", body: "Expressive wordage")
-    @first_comment = @first_post.comments.create(body: "Inflamatory doublespeak")
+    @first_comment = @first_post.comments.create(body: "Inflammatory doublespeak")
     @first_categorization = @davey_mcdave.categorizations.create(category: Category.first, post: @first_post)
   end
 
   teardown do
-    @davey_mcdave.destroy
-    @first_post.destroy
     @first_comment.destroy
     @first_categorization.destroy
+    @davey_mcdave.destroy
+    @first_post.destroy
   end
 
   def test_missing_data_in_a_nested_include_should_not_cause_errors_when_constructing_objects

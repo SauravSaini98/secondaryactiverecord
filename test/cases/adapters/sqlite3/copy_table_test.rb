@@ -2,11 +2,11 @@
 
 require "cases/helper"
 
-class CopyTableTest < SecondaryActiveRecord::SQLite3TestCase
+class CopyTableTest < ActiveRecord::SQLite3TestCase
   fixtures :customers
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     class << @connection
       public :copy_table, :table_structure, :indexes
     end
@@ -23,6 +23,16 @@ class CopyTableTest < SecondaryActiveRecord::SQLite3TestCase
     end
 
     @connection.drop_table(to) rescue nil
+  end
+
+  def test_copy_table_with_column_with_default
+    test_copy_table("comments", "comments_with_default") do
+      @connection.add_column("comments_with_default", "options", "json", default: {})
+      test_copy_table("comments_with_default", "comments_with_default2") do
+        column = @connection.columns("comments_with_default2").find { |col| col.name == "options" }
+        assert_equal "{}", column.default
+      end
+    end
   end
 
   def test_copy_table_renaming_column

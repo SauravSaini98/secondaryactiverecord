@@ -4,12 +4,12 @@ require "cases/helper"
 require "models/topic"
 require "models/reply"
 
-class Mysql2StoredProcedureTest < SecondaryActiveRecord::Mysql2TestCase
+class Mysql2StoredProcedureTest < ActiveRecord::Mysql2TestCase
   fixtures :topics
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
-    unless SecondaryActiveRecord::Base.connection.version >= "5.6.0"
+    @connection = ActiveRecord::Base.connection
+    unless ActiveRecord::Base.connection.database_version >= "5.6.0"
       skip("no stored procedure support")
     end
   end
@@ -17,7 +17,7 @@ class Mysql2StoredProcedureTest < SecondaryActiveRecord::Mysql2TestCase
   # Test that MySQL allows multiple results for stored procedures
   #
   # In MySQL 5.6, CLIENT_MULTI_RESULTS is enabled by default.
-  # https://dev.mysql.com/doc/refman/5.6/en/call.html
+  # https://dev.mysql.com/doc/refman/en/call.html
   def test_multi_results
     rows = @connection.select_rows("CALL ten();")
     assert_equal 10, rows[0][0].to_i, "ten() did not return 10 as expected: #{rows.inspect}"

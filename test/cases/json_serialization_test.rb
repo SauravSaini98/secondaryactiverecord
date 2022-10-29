@@ -10,21 +10,20 @@ require "models/comment"
 
 module JsonSerializationHelpers
   private
-
     def set_include_root_in_json(value)
-      original_root_in_json = SecondaryActiveRecord::Base.include_root_in_json
-      SecondaryActiveRecord::Base.include_root_in_json = value
+      original_root_in_json = ActiveRecord::Base.include_root_in_json
+      ActiveRecord::Base.include_root_in_json = value
       yield
     ensure
-      SecondaryActiveRecord::Base.include_root_in_json = original_root_in_json
+      ActiveRecord::Base.include_root_in_json = original_root_in_json
     end
 end
 
-class JsonSerializationTest < SecondaryActiveRecord::TestCase
+class JsonSerializationTest < ActiveRecord::TestCase
   include JsonSerializationHelpers
 
   class NamespacedContact < Contact
-    column :name, :string
+    column :name, "string"
   end
 
   def setup
@@ -34,7 +33,7 @@ class JsonSerializationTest < SecondaryActiveRecord::TestCase
       avatar: "binarydata",
       created_at: Time.utc(2006, 8, 1),
       awesome: true,
-      preferences: { shows: "anime" }
+      preferences: { "shows" => "anime" }
     )
   end
 
@@ -167,7 +166,7 @@ class JsonSerializationTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class DatabaseConnectedJsonEncodingTest < SecondaryActiveRecord::TestCase
+class DatabaseConnectedJsonEncodingTest < ActiveRecord::TestCase
   fixtures :authors, :author_addresses, :posts, :comments, :tags, :taggings
 
   include JsonSerializationHelpers
@@ -302,7 +301,7 @@ class DatabaseConnectedJsonEncodingTest < SecondaryActiveRecord::TestCase
 
   def test_should_be_able_to_encode_relation
     set_include_root_in_json(true) do
-      authors_relation = Author.where(id: [@david.id, @mary.id])
+      authors_relation = Author.where(id: [@david.id, @mary.id]).order(:id)
 
       json = ActiveSupport::JSON.encode authors_relation, only: :name
       assert_equal '[{"author":{"name":"David"}},{"author":{"name":"Mary"}}]', json

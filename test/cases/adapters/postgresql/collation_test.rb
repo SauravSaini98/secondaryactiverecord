@@ -3,11 +3,11 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlCollationTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlCollationTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table :postgresql_collations, force: true do |t|
       t.string :string_c, collation: "C"
       t.text :text_posix, collation: "POSIX"

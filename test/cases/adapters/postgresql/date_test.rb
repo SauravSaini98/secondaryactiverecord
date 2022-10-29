@@ -3,7 +3,7 @@
 require "cases/helper"
 require "models/topic"
 
-class PostgresqlDateTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlDateTest < ActiveRecord::PostgreSQLTestCase
   def test_load_infinity_and_beyond
     topic = Topic.find_by_sql("SELECT 'infinity'::date AS last_read").first
     assert topic.last_read.infinite?, "timestamp should be infinite"

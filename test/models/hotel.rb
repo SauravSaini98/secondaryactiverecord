@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Hotel < SecondaryActiveRecord::Base
+class Hotel < ActiveRecord::Base
   has_many :departments
   has_many :chefs, through: :departments
   has_many :cake_designers, source_type: "CakeDesigner", source: :employable, through: :chefs

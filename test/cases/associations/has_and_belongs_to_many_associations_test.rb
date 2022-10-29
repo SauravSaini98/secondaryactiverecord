@@ -25,6 +25,8 @@ require "models/user"
 require "models/member"
 require "models/membership"
 require "models/sponsor"
+require "models/lesson"
+require "models/student"
 require "models/country"
 require "models/treaty"
 require "models/vertex"
@@ -33,7 +35,7 @@ require "models/publisher/article"
 require "models/publisher/magazine"
 require "active_support/core_ext/string/conversions"
 
-class ProjectWithAfterCreateHook < SecondaryActiveRecord::Base
+class ProjectWithAfterCreateHook < ActiveRecord::Base
   self.table_name = "projects"
   has_and_belongs_to_many :developers,
     class_name: "DeveloperForProjectWithAfterCreateHook",
@@ -49,7 +51,7 @@ class ProjectWithAfterCreateHook < SecondaryActiveRecord::Base
   end
 end
 
-class DeveloperForProjectWithAfterCreateHook < SecondaryActiveRecord::Base
+class DeveloperForProjectWithAfterCreateHook < ActiveRecord::Base
   self.table_name = "developers"
   has_and_belongs_to_many :projects,
     class_name: "ProjectWithAfterCreateHook",
@@ -58,7 +60,7 @@ class DeveloperForProjectWithAfterCreateHook < SecondaryActiveRecord::Base
     foreign_key: "developer_id"
 end
 
-class ProjectWithSymbolsForKeys < SecondaryActiveRecord::Base
+class ProjectWithSymbolsForKeys < ActiveRecord::Base
   self.table_name = "projects"
   has_and_belongs_to_many :developers,
     class_name: "DeveloperWithSymbolsForKeys",
@@ -67,7 +69,7 @@ class ProjectWithSymbolsForKeys < SecondaryActiveRecord::Base
     association_foreign_key: "developer_id"
 end
 
-class DeveloperWithSymbolsForKeys < SecondaryActiveRecord::Base
+class DeveloperWithSymbolsForKeys < ActiveRecord::Base
   self.table_name = "developers"
   has_and_belongs_to_many :projects,
     class_name: "ProjectWithSymbolsForKeys",
@@ -98,7 +100,7 @@ class DeveloperWithExtendOption < Developer
   has_and_belongs_to_many :projects, extend: NamedExtension
 end
 
-class ProjectUnscopingDavidDefaultScope < SecondaryActiveRecord::Base
+class ProjectUnscopingDavidDefaultScope < ActiveRecord::Base
   self.table_name = "projects"
   has_and_belongs_to_many :developers, -> { unscope(where: "name") },
     class_name: "LazyBlockDeveloperCalledDavid",
@@ -107,27 +109,27 @@ class ProjectUnscopingDavidDefaultScope < SecondaryActiveRecord::Base
     association_foreign_key: "developer_id"
 end
 
-class Kitchen < SecondaryActiveRecord::Base
+class Kitchen < ActiveRecord::Base
   has_one :sink
 end
 
-class Sink < SecondaryActiveRecord::Base
+class Sink < ActiveRecord::Base
   has_and_belongs_to_many :sources, join_table: :edges
   belongs_to :kitchen
   accepts_nested_attributes_for :kitchen
 end
 
-class Source < SecondaryActiveRecord::Base
-  self.table_name = "men"
+class Source < ActiveRecord::Base
+  self.table_name = "humans"
   has_and_belongs_to_many :sinks, join_table: :edges
 end
 
-class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
+class HasAndBelongsToManyAssociationsTest < ActiveRecord::TestCase
   fixtures :accounts, :companies, :categories, :posts, :categories_posts, :developers, :projects, :developers_projects,
            :parrots, :pirates, :parrots_pirates, :treasures, :price_estimates, :tags, :taggings, :computers
 
   def setup_data_for_habtm_case
-    SecondaryActiveRecord::Base.connection.execute("delete from countries_treaties")
+    ActiveRecord::Base.connection.execute("delete from countries_treaties")
 
     country = Country.new(name: "India")
     country.country_id = "c1"
@@ -147,7 +149,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   def test_should_property_quote_string_primary_keys
     setup_data_for_habtm_case
 
-    con = SecondaryActiveRecord::Base.connection
+    con = ActiveRecord::Base.connection
     sql = "select * from countries_treaties"
     record = con.select_rows(sql).last
     assert_equal "c1", record[0]
@@ -174,7 +176,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     warning = capture(:stderr) do
       country.treaties << treaty
     end
-    assert_no_match(/WARNING: Secondary Active Record does not support composite primary key\./, warning)
+    assert_no_match(/WARNING: Active Record does not support composite primary key\./, warning)
   end
 
   def test_has_and_belongs_to_many
@@ -183,10 +185,10 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     assert_not_empty david.projects
     assert_equal 2, david.projects.size
 
-    secondary_active_record = Project.find(1)
-    assert_not_empty secondary_active_record.developers
-    assert_equal 3, secondary_active_record.developers.size
-    assert_includes secondary_active_record.developers, david
+    active_record = Project.find(1)
+    assert_not_empty active_record.developers
+    assert_equal 3, active_record.developers.size
+    assert_includes active_record.developers, david
   end
 
   def test_adding_single
@@ -205,8 +207,8 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
 
   def test_adding_type_mismatch
     jamis = Developer.find(2)
-    assert_raise(SecondaryActiveRecord::AssociationTypeMismatch) { jamis.projects << nil }
-    assert_raise(SecondaryActiveRecord::AssociationTypeMismatch) { jamis.projects << 1 }
+    assert_raise(ActiveRecord::AssociationTypeMismatch) { jamis.projects << nil }
+    assert_raise(ActiveRecord::AssociationTypeMismatch) { jamis.projects << 1 }
   end
 
   def test_adding_from_the_project
@@ -275,7 +277,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   def test_habtm_saving_multiple_relationships
     new_project = Project.new("name" => "Grimetime")
     amount_of_developers = 4
-    developers = (0...amount_of_developers).collect { |i| Developer.create(name: "JME #{i}") }.reverse
+    developers = (0...amount_of_developers).reverse_each.map { |i| Developer.create(name: "JME #{i}") }
 
     new_project.developer_ids = [developers[0].id, developers[1].id]
     new_project.developers_with_callback_ids = [developers[2].id, developers[3].id]
@@ -287,8 +289,8 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_habtm_distinct_order_preserved
-    assert_equal developers(:poor_jamis, :jamis, :david), projects(:secondary_active_record).non_unique_developers
-    assert_equal developers(:poor_jamis, :jamis, :david), projects(:secondary_active_record).developers
+    assert_equal developers(:poor_jamis, :jamis, :david), projects(:active_record).non_unique_developers
+    assert_equal developers(:poor_jamis, :jamis, :david), projects(:active_record).developers
   end
 
   def test_habtm_collection_size_from_build
@@ -310,7 +312,8 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
 
   def test_build
     devel = Developer.find(1)
-    proj = assert_no_queries(ignore_none: false) { devel.projects.build("name" => "Projekt") }
+
+    proj = assert_queries(0) { devel.projects.build("name" => "Projekt") }
     assert_not_predicate devel.projects, :loaded?
 
     assert_equal devel.projects.last, proj
@@ -325,7 +328,8 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
 
   def test_new_aliased_to_build
     devel = Developer.find(1)
-    proj = assert_no_queries(ignore_none: false) { devel.projects.new("name" => "Projekt") }
+
+    proj = assert_queries(0) { devel.projects.new("name" => "Projekt") }
     assert_not_predicate devel.projects, :loaded?
 
     assert_equal devel.projects.last, proj
@@ -379,21 +383,21 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
 
   def test_distinct_after_the_fact
     dev = developers(:jamis)
-    dev.projects << projects(:secondary_active_record)
-    dev.projects << projects(:secondary_active_record)
+    dev.projects << projects(:active_record)
+    dev.projects << projects(:active_record)
 
     assert_equal 3, dev.projects.size
     assert_equal 1, dev.projects.uniq.size
   end
 
   def test_distinct_before_the_fact
-    projects(:secondary_active_record).developers << developers(:jamis)
-    projects(:secondary_active_record).developers << developers(:david)
-    assert_equal 3, projects(:secondary_active_record, :reload).developers.size
+    projects(:active_record).developers << developers(:jamis)
+    projects(:active_record).developers << developers(:david)
+    assert_equal 3, projects(:active_record, :reload).developers.size
   end
 
   def test_distinct_option_prevents_duplicate_push
-    project = projects(:secondary_active_record)
+    project = projects(:active_record)
     project.developers << developers(:jamis)
     project.developers << developers(:david)
     assert_equal 3, project.developers.size
@@ -404,23 +408,23 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_distinct_when_association_already_loaded
-    project = projects(:secondary_active_record)
+    project = projects(:active_record)
     project.developers << [ developers(:jamis), developers(:david), developers(:jamis), developers(:david) ]
     assert_equal 3, Project.includes(:developers).find(project.id).developers.size
   end
 
   def test_deleting
     david = Developer.find(1)
-    secondary_active_record = Project.find(1)
+    active_record = Project.find(1)
     david.projects.reload
     assert_equal 2, david.projects.size
-    assert_equal 3, secondary_active_record.developers.size
+    assert_equal 3, active_record.developers.size
 
-    david.projects.delete(secondary_active_record)
+    david.projects.delete(active_record)
 
     assert_equal 1, david.projects.size
     assert_equal 1, david.projects.reload.size
-    assert_equal 2, secondary_active_record.developers.reload.size
+    assert_equal 2, active_record.developers.reload.size
   end
 
   def test_deleting_array
@@ -518,42 +522,42 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_associations_with_conditions
-    assert_equal 3, projects(:secondary_active_record).developers.size
-    assert_equal 1, projects(:secondary_active_record).developers_named_david.size
-    assert_equal 1, projects(:secondary_active_record).developers_named_david_with_hash_conditions.size
+    assert_equal 3, projects(:active_record).developers.size
+    assert_equal 1, projects(:active_record).developers_named_david.size
+    assert_equal 1, projects(:active_record).developers_named_david_with_hash_conditions.size
 
-    assert_equal developers(:david), projects(:secondary_active_record).developers_named_david.find(developers(:david).id)
-    assert_equal developers(:david), projects(:secondary_active_record).developers_named_david_with_hash_conditions.find(developers(:david).id)
-    assert_equal developers(:david), projects(:secondary_active_record).salaried_developers.find(developers(:david).id)
+    assert_equal developers(:david), projects(:active_record).developers_named_david.find(developers(:david).id)
+    assert_equal developers(:david), projects(:active_record).developers_named_david_with_hash_conditions.find(developers(:david).id)
+    assert_equal developers(:david), projects(:active_record).salaried_developers.find(developers(:david).id)
 
-    projects(:secondary_active_record).developers_named_david.clear
-    assert_equal 2, projects(:secondary_active_record, :reload).developers.size
+    projects(:active_record).developers_named_david.clear
+    assert_equal 2, projects(:active_record, :reload).developers.size
   end
 
   def test_find_in_association
     # Using sql
-    assert_equal developers(:david), projects(:secondary_active_record).developers.find(developers(:david).id), "SQL find"
+    assert_equal developers(:david), projects(:active_record).developers.find(developers(:david).id), "SQL find"
 
     # Using ruby
-    secondary_active_record = projects(:secondary_active_record)
-    secondary_active_record.developers.reload
-    assert_equal developers(:david), secondary_active_record.developers.find(developers(:david).id), "Ruby find"
+    active_record = projects(:active_record)
+    active_record.developers.reload
+    assert_equal developers(:david), active_record.developers.find(developers(:david).id), "Ruby find"
   end
 
   def test_include_uses_array_include_after_loaded
-    project = projects(:secondary_active_record)
+    project = projects(:active_record)
     project.developers.load_target
 
     developer = project.developers.first
 
-    assert_no_queries(ignore_none: false) do
+    assert_queries(0) do
       assert_predicate project.developers, :loaded?
       assert_includes project.developers, developer
     end
   end
 
   def test_include_checks_if_record_exists_if_target_not_loaded
-    project = projects(:secondary_active_record)
+    project = projects(:active_record)
     developer = project.developers.first
 
     project.reload
@@ -565,35 +569,35 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_include_returns_false_for_non_matching_record_to_verify_scoping
-    project = projects(:secondary_active_record)
+    project = projects(:active_record)
     developer = Developer.create name: "Bryan", salary: 50_000
 
     assert_not_predicate project.developers, :loaded?
-    assert ! project.developers.include?(developer)
+    assert_not project.developers.include?(developer)
   end
 
   def test_find_with_merged_options
-    assert_equal 1, projects(:secondary_active_record).limited_developers.size
-    assert_equal 1, projects(:secondary_active_record).limited_developers.to_a.size
-    assert_equal 3, projects(:secondary_active_record).limited_developers.limit(nil).to_a.size
+    assert_equal 1, projects(:active_record).limited_developers.size
+    assert_equal 1, projects(:active_record).limited_developers.to_a.size
+    assert_equal 3, projects(:active_record).limited_developers.limit(nil).to_a.size
   end
 
   def test_dynamic_find_should_respect_association_order
     # Developers are ordered 'name DESC, id DESC'
-    high_id_jamis = projects(:secondary_active_record).developers.create(name: "Jamis")
+    high_id_jamis = projects(:active_record).developers.create(name: "Jamis")
 
-    assert_equal high_id_jamis, projects(:secondary_active_record).developers.merge(where: "name = 'Jamis'").first
-    assert_equal high_id_jamis, projects(:secondary_active_record).developers.find_by_name("Jamis")
+    assert_equal high_id_jamis, projects(:active_record).developers.merge(where: "name = 'Jamis'").first
+    assert_equal high_id_jamis, projects(:active_record).developers.find_by_name("Jamis")
   end
 
   def test_find_should_append_to_association_order
-    ordered_developers = projects(:secondary_active_record).developers.order("projects.id")
+    ordered_developers = projects(:active_record).developers.order("projects.id")
     assert_equal ["developers.name desc, developers.id desc", "projects.id"], ordered_developers.order_values
   end
 
   def test_dynamic_find_all_should_respect_readonly_access
-    projects(:secondary_active_record).readonly_developers.each { |d| assert_raise(SecondaryActiveRecord::ReadOnlyRecord) { d.save!  } if d.valid? }
-    projects(:secondary_active_record).readonly_developers.each(&:readonly?)
+    projects(:active_record).readonly_developers.each { |d| assert_raise(ActiveRecord::ReadOnlyRecord) { d.save!  } if d.valid? }
+    projects(:active_record).readonly_developers.each(&:readonly?)
   end
 
   def test_new_with_values_in_collection
@@ -609,10 +613,10 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_find_in_association_with_options
-    developers = projects(:secondary_active_record).developers.to_a
+    developers = projects(:active_record).developers.to_a
     assert_equal 3, developers.size
 
-    assert_equal developers(:poor_jamis), projects(:secondary_active_record).developers.where("salary < 10000").first
+    assert_equal developers(:poor_jamis), projects(:active_record).developers.where("salary < 10000").first
   end
 
   def test_association_with_extend_option
@@ -632,7 +636,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     david.projects = [projects(:action_controller), Project.new("name" => "ActionWebSearch")]
     david.save
     assert_equal 2, david.projects.length
-    assert_not_includes david.projects, projects(:secondary_active_record)
+    assert_not_includes david.projects, projects(:active_record)
   end
 
   def test_replace_on_new_object
@@ -662,7 +666,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     assert_includes developer.sym_special_projects, sp
   end
 
-  def test_update_attributes_after_push_without_duplicate_join_table_rows
+  def test_update_columns_after_push_without_duplicate_join_table_rows
     developer = Developer.new("name" => "Kano")
     project = SpecialProject.create("name" => "Special Project")
     assert developer.save
@@ -696,25 +700,21 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     assert_equal ["id"], developers(:david).projects.select(:id).first.attributes.keys
   end
 
+  def test_join_middle_table_alias
+    assert_equal(
+      2,
+      Project.includes(:developers_projects).where.not("developers_projects.joined_on": nil).to_a.size
+    )
+  end
+
   def test_join_table_alias
-    # FIXME: `references` has no impact on the aliases generated for the join
-    # query.  The fact that we pass `:developers_projects_join` to `references`
-    # and that the SQL string contains `developers_projects_join` is merely a
-    # coincidence.
     assert_equal(
       3,
-      Developer.references(:developers_projects_join).merge(
-        includes: { projects: :developers },
-        where: "projects_developers_projects_join.joined_on IS NOT NULL"
-      ).to_a.size
+      Developer.includes(projects: :developers).where.not("developers_projects_projects_join.joined_on": nil).to_a.size
     )
   end
 
   def test_join_with_group
-    # FIXME: `references` has no impact on the aliases generated for the join
-    # query.  The fact that we pass `:developers_projects_join` to `references`
-    # and that the SQL string contains `developers_projects_join` is merely a
-    # coincidence.
     group = Developer.columns.inject([]) do |g, c|
       g << "developers.#{c.name}"
       g << "developers_projects_2.#{c.name}"
@@ -723,10 +723,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
 
     assert_equal(
       3,
-      Developer.references(:developers_projects_join).merge(
-        includes: { projects: :developers }, where: "projects_developers_projects_join.joined_on IS NOT NULL",
-        group: group.join(",")
-      ).to_a.size
+      Developer.includes(projects: :developers).where.not("developers_projects_projects_join.joined_on": nil).group(group.join(",")).to_a.size
     )
   end
 
@@ -743,13 +740,13 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_find_scoped_grouped_having
-    assert_equal 2, projects(:secondary_active_record).well_paid_salary_groups.to_a.size
-    assert projects(:secondary_active_record).well_paid_salary_groups.all? { |g| g.salary > 10000 }
+    assert_equal 2, projects(:active_record).well_paid_salary_groups.to_a.size
+    assert projects(:active_record).well_paid_salary_groups.all? { |g| g.salary > 10000 }
   end
 
   def test_get_ids
-    assert_equal projects(:secondary_active_record, :action_controller).map(&:id).sort, developers(:david).project_ids.sort
-    assert_equal [projects(:secondary_active_record).id], developers(:jamis).project_ids
+    assert_equal projects(:active_record, :action_controller).map(&:id).sort, developers(:david).project_ids.sort
+    assert_equal [projects(:active_record).id], developers(:jamis).project_ids
   end
 
   def test_get_ids_for_loaded_associations
@@ -764,26 +761,36 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   def test_get_ids_for_unloaded_associations_does_not_load_them
     developer = developers(:david)
     assert_not_predicate developer.projects, :loaded?
-    assert_equal projects(:secondary_active_record, :action_controller).map(&:id).sort, developer.project_ids.sort
+    assert_equal projects(:active_record, :action_controller).map(&:id).sort, developer.project_ids.sort
     assert_not_predicate developer.projects, :loaded?
   end
 
   def test_assign_ids
     developer = Developer.new("name" => "Joe")
-    developer.project_ids = projects(:secondary_active_record, :action_controller).map(&:id)
+    developer.project_ids = projects(:active_record, :action_controller).map(&:id)
     developer.save
     developer.reload
     assert_equal 2, developer.projects.length
-    assert_equal [projects(:secondary_active_record), projects(:action_controller)].map(&:id).sort, developer.project_ids.sort
+    assert_equal [projects(:active_record), projects(:action_controller)].map(&:id).sort, developer.project_ids.sort
   end
 
   def test_assign_ids_ignoring_blanks
     developer = Developer.new("name" => "Joe")
-    developer.project_ids = [projects(:secondary_active_record).id, nil, projects(:action_controller).id, ""]
+    developer.project_ids = [projects(:active_record).id, nil, projects(:action_controller).id, ""]
     developer.save
     developer.reload
     assert_equal 2, developer.projects.length
-    assert_equal [projects(:secondary_active_record), projects(:action_controller)].map(&:id).sort, developer.project_ids.sort
+    assert_equal [projects(:active_record), projects(:action_controller)].map(&:id).sort, developer.project_ids.sort
+  end
+
+  def test_singular_ids_are_reloaded_after_collection_concat
+    student = Student.create(name: "Alberto Almagro")
+    student.lesson_ids
+
+    lesson = Lesson.create(name: "DSI")
+    student.lessons << lesson
+
+    assert_includes student.lesson_ids, lesson.id
   end
 
   def test_scoped_find_on_through_association_doesnt_return_read_only_records
@@ -795,7 +802,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_has_many_through_polymorphic_has_manys_works
-    assert_equal [10, 20].to_set, pirates(:redbeard).treasure_estimates.map(&:price).to_set
+    assert_equal ["$10.00", "$20.00"].to_set, pirates(:redbeard).treasure_estimates.map(&:price).to_set
   end
 
   def test_symbols_as_keys
@@ -873,7 +880,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
 
   def test_has_and_belongs_to_many_associations_on_new_records_use_null_relations
     projects = Developer.new.projects
-    assert_no_queries(ignore_none: false) do
+    assert_queries(0) do
       assert_equal [], projects
       assert_equal [], projects.where(title: "omg")
       assert_equal [], projects.pluck(:title)
@@ -989,7 +996,7 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     assert_equal first_project.salaried_developers.size, preloaded_first_project.salaried_developers.size
   end
 
-  def test_has_and_belongs_to_many_is_useable_with_belongs_to_required_by_default
+  def test_has_and_belongs_to_many_is_usable_with_belongs_to_required_by_default
     assert_difference "Project.first.developers_required_by_default.size", 1 do
       Project.first.developers_required_by_default.create!(name: "Sean", salary: 50000)
     end
@@ -1000,17 +1007,15 @@ class HasAndBelongsToManyAssociationsTest < SecondaryActiveRecord::TestCase
     assert_nothing_raised { user.jobs_pool.clear }
   end
 
-  def test_has_and_belongs_to_many_while_partial_writes_false
-    begin
-      original_partial_writes = SecondaryActiveRecord::Base.partial_writes
-      SecondaryActiveRecord::Base.partial_writes = false
-      developer = Developer.new(name: "Mehmet Emin İNAÇ")
-      developer.projects << Project.new(name: "Bounty")
+  def test_has_and_belongs_to_many_while_partial_inserts_false
+    original_partial_inserts = ActiveRecord::Base.partial_inserts
+    ActiveRecord::Base.partial_inserts = false
+    developer = Developer.new(name: "Mehmet Emin İNAÇ")
+    developer.projects << Project.new(name: "Bounty")
 
-      assert developer.save
-    ensure
-      SecondaryActiveRecord::Base.partial_writes = original_partial_writes
-    end
+    assert developer.save
+  ensure
+    ActiveRecord::Base.partial_inserts = original_partial_inserts
   end
 
   def test_has_and_belongs_to_many_with_belongs_to

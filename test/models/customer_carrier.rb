@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class CustomerCarrier < SecondaryActiveRecord::Base
+class CustomerCarrier < ActiveRecord::Base
   cattr_accessor :current_customer
 
   belongs_to :customer

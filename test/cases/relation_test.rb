@@ -7,15 +7,15 @@ require "models/author"
 require "models/rating"
 require "models/categorization"
 
-module SecondaryActiveRecord
-  class RelationTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class RelationTest < ActiveRecord::TestCase
     fixtures :posts, :comments, :authors, :author_addresses, :ratings, :categorizations
 
     def test_construction
       relation = Relation.new(FakeKlass, table: :b)
       assert_equal FakeKlass, relation.klass
       assert_equal :b, relation.table
-      assert !relation.loaded, "relation is not loaded"
+      assert_not relation.loaded, "relation is not loaded"
     end
 
     def test_responds_to_model_and_returns_klass
@@ -26,7 +26,7 @@ module SecondaryActiveRecord
     def test_initialize_single_values
       relation = Relation.new(FakeKlass)
       (Relation::SINGLE_VALUE_METHODS - [:create_with]).each do |method|
-        assert_nil relation.send("#{method}_value"), method.to_s
+        assert_nil relation.public_send("#{method}_value"), method.to_s
       end
       value = relation.create_with_value
       assert_equal({}, value)
@@ -36,7 +36,7 @@ module SecondaryActiveRecord
     def test_multi_value_initialize
       relation = Relation.new(FakeKlass)
       Relation::MULTI_VALUE_METHODS.each do |method|
-        values = relation.send("#{method}_values")
+        values = relation.public_send("#{method}_values")
         assert_equal [], values, method.to_s
         assert_predicate values, :frozen?, method.to_s
       end
@@ -50,6 +50,19 @@ module SecondaryActiveRecord
     def test_empty_where_values_hash
       relation = Relation.new(FakeKlass)
       assert_equal({}, relation.where_values_hash)
+
+      relation.where!(relation.table[:id].not_eq(10))
+      assert_equal({}, relation.where_values_hash)
+
+      relation.where!(relation.table[:id].is_distinct_from(10))
+      assert_equal({}, relation.where_values_hash)
+    end
+
+    def test_where_values_hash_with_in_clause
+      relation = Relation.new(Post)
+      relation.where!(title: ["foo", "bar", "hello"])
+
+      assert_equal({ "title" => ["foo", "bar", "hello"] }, relation.where_values_hash)
     end
 
     def test_has_values
@@ -101,11 +114,14 @@ module SecondaryActiveRecord
 
       relation.merge!(relation)
       assert_predicate relation, :empty_scope?
+
+      assert_not_predicate NullPost.all, :empty_scope?
+      assert_not_predicate FirstPost.all, :empty_scope?
     end
 
     def test_bad_constants_raise_errors
       assert_raises(NameError) do
-        SecondaryActiveRecord::Relation::HelloWorld
+        ActiveRecord::Relation::HelloWorld
       end
     end
 
@@ -124,13 +140,13 @@ module SecondaryActiveRecord
       relation = Relation.new(FakeKlass)
       assert_equal [], relation.references_values
       relation = relation.references(:foo).references(:omg, :lol)
-      assert_equal ["foo", "omg", "lol"], relation.references_values
+      assert_equal [:foo, :omg, :lol], relation.references_values
     end
 
     def test_references_values_dont_duplicate
       relation = Relation.new(FakeKlass)
       relation = relation.references(:foo).references(:foo)
-      assert_equal ["foo"], relation.references_values
+      assert_equal [:foo], relation.references_values
     end
 
     test "merging a hash into a relation" do
@@ -232,7 +248,7 @@ module SecondaryActiveRecord
       assert_equal 3, nb_inner_join, "Wrong amount of INNER JOIN in query"
 
       # using `\W` as the column separator
-      assert queries.any? { |sql| %r[INNER\s+JOIN\s+#{Author.quoted_table_name}\s+\Wauthors_categorizations\W]i.match?(sql) }, "Should be aliasing the child INNER JOINs in query"
+      assert queries.any? { |sql| %r[INNER\s+JOIN\s+#{Regexp.escape(Author.quoted_table_name)}\s+\Wauthors_categorizations\W]i.match?(sql) }, "Should be aliasing the child INNER JOINs in query"
     end
 
     def test_relation_with_merged_joins_aliased_works
@@ -275,20 +291,21 @@ module SecondaryActiveRecord
 
     def test_select_quotes_when_using_from_clause
       skip_if_sqlite3_version_includes_quoting_bug
-      quoted_join = SecondaryActiveRecord::Base.connection.quote_table_name("join")
+      quoted_join = ActiveRecord::Base.connection.quote_table_name("join")
       selected = Post.select(:join).from(Post.select("id as #{quoted_join}")).map(&:join)
       assert_equal Post.pluck(:id), selected
     end
 
     def test_selecting_aliased_attribute_quotes_column_name_when_from_is_used
       skip_if_sqlite3_version_includes_quoting_bug
-      klass = Class.new(SecondaryActiveRecord::Base) do
+      klass = Class.new(ActiveRecord::Base) do
         self.table_name = :test_with_keyword_column_name
         alias_attribute :description, :desc
       end
       klass.create!(description: "foo")
 
       assert_equal ["foo"], klass.select(:description).from(klass.all).map(&:desc)
+      assert_equal ["foo"], klass.reselect(:description).from(klass.all).map(&:desc)
     end
 
     def test_relation_merging_with_merged_joins_as_strings
@@ -307,7 +324,66 @@ module SecondaryActiveRecord
       assert_equal 3, ratings.count
     end
 
-    class EnsureRoundTripTypeCasting < SecondaryActiveRecord::Type::Value
+    def test_relation_with_annotation_includes_comment_in_to_sql
+      post_with_annotation = Post.where(id: 1).annotate("foo")
+      assert_match %r{= 1 /\* foo \*/}, post_with_annotation.to_sql
+    end
+
+    def test_relation_with_annotation_includes_comment_in_sql
+      post_with_annotation = Post.where(id: 1).annotate("foo")
+      assert_sql(%r{/\* foo \*/}) do
+        assert post_with_annotation.first, "record should be found"
+      end
+    end
+
+    def test_relation_with_annotation_chains_sql_comments
+      post_with_annotation = Post.where(id: 1).annotate("foo").annotate("bar")
+      assert_sql(%r{/\* foo \*/ /\* bar \*/}) do
+        assert post_with_annotation.first, "record should be found"
+      end
+    end
+
+    def test_relation_with_annotation_filters_sql_comment_delimiters
+      post_with_annotation = Post.where(id: 1).annotate("**//foo//**")
+      assert_match %r{= 1 /\* foo \*/}, post_with_annotation.to_sql
+    end
+
+    def test_relation_with_annotation_includes_comment_in_count_query
+      post_with_annotation = Post.annotate("foo")
+      all_count = Post.all.to_a.count
+      assert_sql(%r{/\* foo \*/}) do
+        assert_equal all_count, post_with_annotation.count
+      end
+    end
+
+    def test_relation_without_annotation_does_not_include_an_empty_comment
+      log = capture_sql do
+        Post.where(id: 1).first
+      end
+
+      assert_not_predicate log, :empty?
+      assert_predicate log.select { |query| query.match?(%r{/\*}) }, :empty?
+    end
+
+    def test_relation_with_optimizer_hints_filters_sql_comment_delimiters
+      post_with_hint = Post.where(id: 1).optimizer_hints("**//BADHINT//**")
+      assert_match %r{BADHINT}, post_with_hint.to_sql
+      assert_no_match %r{\*/BADHINT}, post_with_hint.to_sql
+      assert_no_match %r{\*//BADHINT}, post_with_hint.to_sql
+      assert_no_match %r{BADHINT/\*}, post_with_hint.to_sql
+      assert_no_match %r{BADHINT//\*}, post_with_hint.to_sql
+      post_with_hint = Post.where(id: 1).optimizer_hints("/*+ BADHINT */")
+      assert_match %r{/\*\+ BADHINT \*/}, post_with_hint.to_sql
+    end
+
+    def test_does_not_duplicate_optimizer_hints_on_merge
+      escaped_table = Post.connection.quote_table_name("posts")
+      expected = "SELECT /*+ OMGHINT */ #{escaped_table}.* FROM #{escaped_table}"
+      query = Post.optimizer_hints("OMGHINT").merge(Post.optimizer_hints("OMGHINT")).to_sql
+      assert_equal expected, query
+    end
+
+    class EnsureRoundTripTypeCasting < ActiveRecord::Type::Value
       def type
         :string
       end
@@ -328,7 +404,7 @@ module SecondaryActiveRecord
       end
     end
 
-    class UpdateAllTestModel < SecondaryActiveRecord::Base
+    class UpdateAllTestModel < ActiveRecord::Base
       self.table_name = "posts"
 
       attribute :body, EnsureRoundTripTypeCasting.new
@@ -340,8 +416,39 @@ module SecondaryActiveRecord
       assert_equal "type cast from database", UpdateAllTestModel.first.body
     end
 
-    private
+    def test_skip_preloading_after_arel_has_been_generated
+      assert_nothing_raised do
+        relation = Comment.all
+        relation.arel
+        relation.skip_preloading!
+      end
+    end
 
+    test "no queries on empty IN" do
+      assert_queries(0) do
+        Post.where(id: []).load
+      end
+    end
+
+    test "can unscope empty IN" do
+      assert_queries(1) do
+        Post.where(id: []).unscope(where: :id).load
+      end
+    end
+
+    test "no queries on empty relation exists?" do
+      assert_queries(0) do
+        Post.where(id: []).exists?(123)
+      end
+    end
+
+    test "no queries on empty condition exists?" do
+      assert_queries(0) do
+        Post.all.exists?(id: [])
+      end
+    end
+
+    private
       def skip_if_sqlite3_version_includes_quoting_bug
         if sqlite3_version_includes_quoting_bug?
           skip <<-ERROR.squish
@@ -354,7 +461,7 @@ module SecondaryActiveRecord
 
       def sqlite3_version_includes_quoting_bug?
         if current_adapter?(:SQLite3Adapter)
-          selected_quoted_column_names = SecondaryActiveRecord::Base.connection.exec_query(
+          selected_quoted_column_names = ActiveRecord::Base.connection.exec_query(
             'SELECT "join" FROM (SELECT id AS "join" FROM posts) subquery'
           ).columns
           ["join"] != selected_quoted_column_names

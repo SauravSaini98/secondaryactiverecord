@@ -4,18 +4,18 @@ require "cases/helper"
 require "models/post"
 require "models/comment"
 
-module SecondaryActiveRecord
+module ActiveRecord
   module ConnectionAdapters
-    class Mysql2SchemaTest < SecondaryActiveRecord::Mysql2TestCase
+    class Mysql2SchemaTest < ActiveRecord::Mysql2TestCase
       fixtures :posts
 
       def setup
-        @connection = SecondaryActiveRecord::Base.connection
-        db          = Post.connection_pool.spec.config[:database]
+        @connection = ActiveRecord::Base.connection
+        db          = Post.connection_pool.db_config.database
         table       = Post.table_name
         @db_name    = db
 
-        @omgpost = Class.new(SecondaryActiveRecord::Base) do
+        @omgpost = Class.new(ActiveRecord::Base) do
           self.inheritance_column = :disabled
           self.table_name = "#{db}.#{table}"
           def self.name; "Post"; end
@@ -41,7 +41,7 @@ module SecondaryActiveRecord
         column_24 = @connection.columns(:mysql_doubles).find { |c| c.name == "float_24" }
         column_25 = @connection.columns(:mysql_doubles).find { |c| c.name == "float_25" }
 
-        # Mysql floats are precision 0..24, Mysql doubles are precision 25..53
+        # MySQL floats are precision 0..24, MySQL doubles are precision 25..53
         assert_equal 24, column_no_limit.limit
         assert_equal 24, column_short.limit
         assert_equal 53, column_long.limit
@@ -67,7 +67,7 @@ module SecondaryActiveRecord
       end
 
       def test_data_source_exists_wrong_schema
-        assert(!@connection.data_source_exists?("#{@db_name}.zomg"), "data_source should not exist")
+        assert_not(@connection.data_source_exists?("#{@db_name}.zomg"), "data_source should not exist")
       end
 
       def test_dump_indexes
@@ -106,9 +106,9 @@ module SecondaryActiveRecord
   end
 end
 
-class Mysql2AnsiQuotesTest < SecondaryActiveRecord::Mysql2TestCase
+class Mysql2AnsiQuotesTest < ActiveRecord::Mysql2TestCase
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.execute("SET SESSION sql_mode='ANSI_QUOTES'")
   end
 

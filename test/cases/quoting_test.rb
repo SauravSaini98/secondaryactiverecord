@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   module ConnectionAdapters
-    class QuotingTest < SecondaryActiveRecord::TestCase
+    class QuotingTest < ActiveRecord::TestCase
       def setup
         @quoter = Class.new { include Quoting }.new
       end
@@ -43,27 +43,20 @@ module SecondaryActiveRecord
 
       def test_quoted_date
         t = Date.today
-        assert_equal t.to_s(:sec_db), @quoter.quoted_date(t)
+        assert_equal t.to_fs(:db), @quoter.quoted_date(t)
       end
 
       def test_quoted_timestamp_utc
         with_timezone_config default: :utc do
           t = Time.now.change(usec: 0)
-          assert_equal t.getutc.to_s(:sec_db), @quoter.quoted_date(t)
+          assert_equal t.getutc.to_fs(:db), @quoter.quoted_date(t)
         end
       end
 
       def test_quoted_timestamp_local
         with_timezone_config default: :local do
           t = Time.now.change(usec: 0)
-          assert_equal t.getlocal.to_s(:sec_db), @quoter.quoted_date(t)
-        end
-      end
-
-      def test_quoted_timestamp_crazy
-        with_timezone_config default: :asdfasdf do
-          t = Time.now.change(usec: 0)
-          assert_equal t.getlocal.to_s(:sec_db), @quoter.quoted_date(t)
+          assert_equal t.getlocal.to_fs(:db), @quoter.quoted_date(t)
         end
       end
 
@@ -72,7 +65,7 @@ module SecondaryActiveRecord
           t = Time.now.change(usec: 0)
 
           expected = t.change(year: 2000, month: 1, day: 1)
-          expected = expected.getutc.to_s(:sec_db).slice(11..-1)
+          expected = expected.getutc.to_fs(:db).slice(11..-1)
 
           assert_equal expected, @quoter.quoted_time(t)
         end
@@ -83,7 +76,7 @@ module SecondaryActiveRecord
           t = Time.now.change(usec: 0)
 
           expected = t.change(year: 2000, month: 1, day: 1)
-          expected = expected.getlocal.to_s(:sec_db).sub("2000-01-01 ", "")
+          expected = expected.getlocal.to_fs(:db).sub("2000-01-01 ", "")
 
           assert_equal expected, @quoter.quoted_time(t)
         end
@@ -95,7 +88,7 @@ module SecondaryActiveRecord
             t = Time.new(2000, 7, 1, 0, 0, 0, "+04:30")
 
             expected = t.change(year: 2000, month: 1, day: 1)
-            expected = expected.getutc.to_s(:sec_db).slice(11..-1)
+            expected = expected.getutc.to_fs(:db).slice(11..-1)
 
             assert_equal expected, @quoter.quoted_time(t)
           end
@@ -108,28 +101,17 @@ module SecondaryActiveRecord
             t = Time.new(2000, 7, 1, 0, 0, 0, "+04:30")
 
             expected = t.change(year: 2000, month: 1, day: 1)
-            expected = expected.getlocal.to_s(:sec_db).slice(11..-1)
+            expected = expected.getlocal.to_fs(:db).slice(11..-1)
 
             assert_equal expected, @quoter.quoted_time(t)
           end
         end
       end
 
-      def test_quoted_time_crazy
-        with_timezone_config default: :asdfasdf do
-          t = Time.now.change(usec: 0)
-
-          expected = t.change(year: 2000, month: 1, day: 1)
-          expected = expected.getlocal.to_s(:sec_db).sub("2000-01-01 ", "")
-
-          assert_equal expected, @quoter.quoted_time(t)
-        end
-      end
-
       def test_quoted_datetime_utc
         with_timezone_config default: :utc do
           t = Time.now.change(usec: 0).to_datetime
-          assert_equal t.getutc.to_s(:sec_db), @quoter.quoted_date(t)
+          assert_equal t.getutc.to_fs(:db), @quoter.quoted_date(t)
         end
       end
 
@@ -138,7 +120,7 @@ module SecondaryActiveRecord
       def test_quoted_datetime_local
         with_timezone_config default: :local do
           t = Time.now.change(usec: 0).to_datetime
-          assert_equal t.to_s(:sec_db), @quoter.quoted_date(t)
+          assert_equal t.to_fs(:db), @quoter.quoted_date(t)
         end
       end
 
@@ -185,10 +167,10 @@ module SecondaryActiveRecord
         assert_equal "'Object'", @quoter.quote(Object)
       end
 
-      def test_crazy_object
-        crazy = Object.new
+      def test_quote_object_instance
+        object = Object.new
         e = assert_raises(TypeError) do
-          @quoter.quote(crazy)
+          @quoter.quote(object)
         end
         assert_equal "can't quote Object", e.message
       end
@@ -207,9 +189,9 @@ module SecondaryActiveRecord
       end
     end
 
-    class TypeCastingTest < SecondaryActiveRecord::TestCase
+    class TypeCastingTest < ActiveRecord::TestCase
       def setup
-        @conn = SecondaryActiveRecord::Base.connection
+        @conn = ActiveRecord::Base.connection
       end
 
       def test_type_cast_symbol
@@ -251,9 +233,9 @@ module SecondaryActiveRecord
       end
     end
 
-    class QuoteBooleanTest < SecondaryActiveRecord::TestCase
+    class QuoteBooleanTest < ActiveRecord::TestCase
       def setup
-        @connection = SecondaryActiveRecord::Base.connection
+        @connection = ActiveRecord::Base.connection
       end
 
       def test_quote_returns_frozen_string
@@ -264,33 +246,6 @@ module SecondaryActiveRecord
       def test_type_cast_returns_frozen_value
         assert_predicate @connection.type_cast(true), :frozen?
         assert_predicate @connection.type_cast(false), :frozen?
-      end
-    end
-
-    if subsecond_precision_supported?
-      class QuoteARBaseTest < SecondaryActiveRecord::TestCase
-        class DatetimePrimaryKey < SecondaryActiveRecord::Base
-        end
-
-        def setup
-          @time = ::Time.utc(2017, 2, 14, 12, 34, 56, 789999)
-          @connection = SecondaryActiveRecord::Base.connection
-          @connection.create_table :datetime_primary_keys, id: :datetime, precision: 3, force: true
-        end
-
-        def teardown
-          @connection.drop_table :datetime_primary_keys, if_exists: true
-        end
-
-        def test_quote_ar_object
-          value = DatetimePrimaryKey.new(id: @time)
-          assert_equal "'2017-02-14 12:34:56.789000'",  @connection.quote(value)
-        end
-
-        def test_type_cast_ar_object
-          value = DatetimePrimaryKey.new(id: @time)
-          assert_equal @connection.type_cast(value.id),  @connection.type_cast(value)
-        end
       end
     end
   end

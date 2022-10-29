@@ -6,30 +6,36 @@ require "models/comment"
 require "models/post"
 require "models/topic"
 
-class NullRelationTest < SecondaryActiveRecord::TestCase
+class NullRelationTest < ActiveRecord::TestCase
   fixtures :posts, :comments
 
   def test_none
-    assert_no_queries(ignore_none: false) do
+    assert_no_queries do
       assert_equal [], Developer.none
       assert_equal [], Developer.all.none
     end
   end
 
   def test_none_chainable
-    assert_no_queries(ignore_none: false) do
+    assert_queries(0) do
       assert_equal [], Developer.none.where(name: "David")
     end
   end
 
   def test_none_chainable_to_existing_scope_extension_method
-    assert_no_queries(ignore_none: false) do
+    assert_no_queries do
       assert_equal 1, Topic.anonymous_extension.none.one
     end
   end
 
+  def test_async_query_on_null_relation
+    assert_no_queries do
+      assert_equal [], Developer.none.load_async.load
+    end
+  end
+
   def test_none_chained_to_methods_firing_queries_straight_to_db
-    assert_no_queries(ignore_none: false) do
+    assert_no_queries do
       assert_equal [],    Developer.none.pluck(:id, :name)
       assert_equal 0,     Developer.none.delete_all
       assert_equal 0,     Developer.none.update_all(name: "David")
@@ -39,7 +45,7 @@ class NullRelationTest < SecondaryActiveRecord::TestCase
   end
 
   def test_null_relation_content_size_methods
-    assert_no_queries(ignore_none: false) do
+    assert_no_queries do
       assert_equal 0,     Developer.none.size
       assert_equal 0,     Developer.none.count
       assert_equal true,  Developer.none.empty?
@@ -51,7 +57,7 @@ class NullRelationTest < SecondaryActiveRecord::TestCase
   end
 
   def test_null_relation_metadata_methods
-    assert_equal "", Developer.none.to_sql
+    assert_includes Developer.none.to_sql, " WHERE (1=0)"
     assert_equal({}, Developer.none.where_values_hash)
   end
 
@@ -61,7 +67,7 @@ class NullRelationTest < SecondaryActiveRecord::TestCase
 
   [:count, :sum].each do |method|
     define_method "test_null_relation_#{method}" do
-      assert_no_queries(ignore_none: false) do
+      assert_no_queries do
         assert_equal 0, Comment.none.public_send(method, :id)
         assert_equal Hash.new, Comment.none.group(:post_id).public_send(method, :id)
       end
@@ -70,7 +76,7 @@ class NullRelationTest < SecondaryActiveRecord::TestCase
 
   [:average, :minimum, :maximum].each do |method|
     define_method "test_null_relation_#{method}" do
-      assert_no_queries(ignore_none: false) do
+      assert_no_queries do
         assert_nil Comment.none.public_send(method, :id)
         assert_equal Hash.new, Comment.none.group(:post_id).public_send(method, :id)
       end

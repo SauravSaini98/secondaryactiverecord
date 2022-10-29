@@ -1,4 +1,4 @@
 # frozen_string_literal: true
 
-class Default < SecondaryActiveRecord::Base
+class Default < ActiveRecord::Base
 end

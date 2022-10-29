@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Molecule < SecondaryActiveRecord::Base
+class Molecule < ActiveRecord::Base
   belongs_to :liquid
   has_many :electrons
 

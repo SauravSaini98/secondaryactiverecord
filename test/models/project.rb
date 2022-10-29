@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Project < SecondaryActiveRecord::Base
+class Project < ActiveRecord::Base
   belongs_to :mentor
   has_and_belongs_to_many :developers, -> { distinct.order "developers.name desc, developers.id desc" }
   has_and_belongs_to_many :readonly_developers, -> { readonly }, class_name: "Developer"
@@ -16,13 +16,14 @@ class Project < SecondaryActiveRecord::Base
   has_and_belongs_to_many :well_paid_salary_groups, -> { group("developers.salary").having("SUM(salary) > 10000").select("SUM(salary) as salary") }, class_name: "Developer"
   belongs_to :firm
   has_one :lead_developer, through: :firm, inverse_of: :contracted_projects
+  has_one :lead_developer_disable_joins, through: :firm, inverse_of: :contracted_projects, source: :lead_developer, disable_joins: true
 
   begin
-    previous_value, SecondaryActiveRecord::Base.belongs_to_required_by_default =
-      SecondaryActiveRecord::Base.belongs_to_required_by_default, true
+    previous_value, ActiveRecord::Base.belongs_to_required_by_default =
+      ActiveRecord::Base.belongs_to_required_by_default, true
     has_and_belongs_to_many :developers_required_by_default, class_name: "Developer"
   ensure
-    SecondaryActiveRecord::Base.belongs_to_required_by_default = previous_value
+    ActiveRecord::Base.belongs_to_required_by_default = previous_value
   end
 
   attr_accessor :developers_log

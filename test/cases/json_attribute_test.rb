@@ -3,11 +3,11 @@
 require "cases/helper"
 require "cases/json_shared_test_cases"
 
-class JsonAttributeTest < SecondaryActiveRecord::TestCase
+class JsonAttributeTest < ActiveRecord::TestCase
   include JSONSharedTestCases
   self.use_transactional_tests = false
 
-  class JsonDataTypeOnText < SecondaryActiveRecord::Base
+  class JsonDataTypeOnText < ActiveRecord::Base
     self.table_name = "json_data_type"
 
     attribute :payload,  :json

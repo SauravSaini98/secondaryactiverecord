@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
-class Notification < SecondaryActiveRecord::Base
+class Notification < ActiveRecord::Base
   validates_presence_of :message
 end

@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-class PostgresqlTypeLookupTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlTypeLookupTest < ActiveRecord::PostgreSQLTestCase
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   test "array delimiters are looked up correctly" do

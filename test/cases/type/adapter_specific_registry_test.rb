@@ -2,8 +2,8 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
-  class AdapterSpecificRegistryTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class AdapterSpecificRegistryTest < ActiveRecord::TestCase
     test "a class can be registered for a symbol" do
       registry = Type::AdapterSpecificRegistry.new
       registry.register(:foo, ::String)
@@ -76,7 +76,6 @@ module SecondaryActiveRecord
     end
 
     test "construct args are passed to the type" do
-      type = Struct.new(:args)
       registry = Type::AdapterSpecificRegistry.new
       registry.register(:foo, type)
 
@@ -117,7 +116,6 @@ module SecondaryActiveRecord
 
     test "registering adapter specific modifiers" do
       decoration = Struct.new(:value)
-      type = Struct.new(:args)
       registry = Type::AdapterSpecificRegistry.new
       registry.register(:foo, type)
       registry.add_modifier({ array: true }, decoration, adapter: :postgresql)
@@ -131,5 +129,17 @@ module SecondaryActiveRecord
         registry.lookup(:foo, array: true, adapter: :sqlite3)
       )
     end
+
+    TYPE = Class.new do
+      attr_reader :args
+
+      def initialize(args = nil)
+        @args = args
+      end
+
+      def ==(other) self.args == other.args end
+    end
+
+    private def type; TYPE end
   end
 end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Task < SecondaryActiveRecord::Base
+class Task < ActiveRecord::Base
   def updated_at
     ending
   end

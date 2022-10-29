@@ -2,7 +2,7 @@
 
 require "cases/helper"
 
-class SchemaMigrationsTest < SecondaryActiveRecord::Mysql2TestCase
+class SchemaMigrationsTest < ActiveRecord::Mysql2TestCase
   self.use_transactional_tests = false
 
   def test_renaming_index_on_foreign_key
@@ -17,10 +17,10 @@ class SchemaMigrationsTest < SecondaryActiveRecord::Mysql2TestCase
 
   def test_initializes_schema_migrations_for_encoding_utf8mb4
     with_encoding_utf8mb4 do
-      table_name = SecondaryActiveRecord::SchemaMigration.table_name
+      table_name = ActiveRecord::SchemaMigration.table_name
       connection.drop_table table_name, if_exists: true
 
-      SecondaryActiveRecord::SchemaMigration.create_table
+      ActiveRecord::SchemaMigration.create_table
 
       assert connection.column_exists?(table_name, :version, :string)
     end
@@ -28,19 +28,18 @@ class SchemaMigrationsTest < SecondaryActiveRecord::Mysql2TestCase
 
   def test_initializes_internal_metadata_for_encoding_utf8mb4
     with_encoding_utf8mb4 do
-      table_name = SecondaryActiveRecord::InternalMetadata.table_name
+      table_name = ActiveRecord::InternalMetadata.table_name
       connection.drop_table table_name, if_exists: true
 
-      SecondaryActiveRecord::InternalMetadata.create_table
+      ActiveRecord::InternalMetadata.create_table
 
       assert connection.column_exists?(table_name, :key, :string)
     end
   ensure
-    SecondaryActiveRecord::InternalMetadata[:environment] = connection.migration_context.current_environment
+    ActiveRecord::InternalMetadata[:environment] = connection.migration_context.current_environment
   end
 
   private
-
     def with_encoding_utf8mb4
       database_name = connection.current_database
       database_info = connection.select_one("SELECT * FROM information_schema.schemata WHERE schema_name = '#{database_name}'")
@@ -56,7 +55,7 @@ class SchemaMigrationsTest < SecondaryActiveRecord::Mysql2TestCase
     end
 
     def connection
-      @connection ||= SecondaryActiveRecord::Base.connection
+      @connection ||= ActiveRecord::Base.connection
     end
 
     def execute(sql)

@@ -3,11 +3,11 @@
 require "cases/helper"
 require "models/professor"
 
-if SecondaryActiveRecord::Base.connection.supports_foreign_tables?
-  class ForeignTableTest < SecondaryActiveRecord::TestCase
+if ActiveRecord::Base.connection.supports_foreign_tables?
+  class ForeignTableTest < ActiveRecord::TestCase
     self.use_transactional_tests = false
 
-    class ForeignProfessor < SecondaryActiveRecord::Base
+    class ForeignProfessor < ActiveRecord::Base
       self.table_name = "foreign_professors"
     end
 
@@ -18,22 +18,22 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_tables?
     def setup
       @professor = Professor.create(name: "Nicola")
 
-      @connection = SecondaryActiveRecord::Base.connection
+      @connection = ActiveRecord::Base.connection
       enable_extension!("postgres_fdw", @connection)
 
-      foreign_db_config = ARTest.connection_config["arunit2"]
-      @connection.execute <<-SQL
+      foreign_db_config = ARTest.test_configuration_hashes["arunit2"]
+      @connection.execute <<~SQL
         CREATE SERVER foreign_server
           FOREIGN DATA WRAPPER postgres_fdw
           OPTIONS (dbname '#{foreign_db_config["database"]}')
       SQL
 
-      @connection.execute <<-SQL
+      @connection.execute <<~SQL
         CREATE USER MAPPING FOR CURRENT_USER
           SERVER foreign_server
       SQL
 
-      @connection.execute <<-SQL
+      @connection.execute <<~SQL
         CREATE FOREIGN TABLE foreign_professors (
           id    int,
           name  character varying NOT NULL
@@ -45,14 +45,14 @@ if SecondaryActiveRecord::Base.connection.supports_foreign_tables?
 
     def teardown
       disable_extension!("postgres_fdw", @connection)
-      @connection.execute <<-SQL
+      @connection.execute <<~SQL
         DROP SERVER IF EXISTS foreign_server CASCADE
       SQL
     end
 
     def test_table_exists
       table_name = ForeignProfessor.table_name
-      assert_not SecondaryActiveRecord::Base.connection.table_exists?(table_name)
+      assert_not ActiveRecord::Base.connection.table_exists?(table_name)
     end
 
     def test_foreign_tables_are_valid_data_sources

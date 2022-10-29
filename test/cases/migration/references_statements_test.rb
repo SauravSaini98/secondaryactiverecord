@@ -2,10 +2,10 @@
 
 require "cases/migration/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class ReferencesStatementsTest < SecondaryActiveRecord::TestCase
-      include SecondaryActiveRecord::Migration::TestHelper
+    class ReferencesStatementsTest < ActiveRecord::TestCase
+      include ActiveRecord::Migration::TestHelper
 
       self.use_transactional_tests = false
 
@@ -20,6 +20,13 @@ module SecondaryActiveRecord
       def test_creates_reference_id_column
         add_reference table_name, :user
         assert column_exists?(table_name, :user_id, :integer)
+      end
+
+      def test_primary_key_and_references_columns_should_be_identical_type
+        add_reference table_name, :user
+        pk = connection.send(:column_for, :users, :id)
+        ref = connection.send(:column_for, table_name, :user_id)
+        assert_equal pk.sql_type, ref.sql_type
       end
 
       def test_does_not_create_reference_type_column
@@ -126,7 +133,6 @@ module SecondaryActiveRecord
       end
 
       private
-
         def with_polymorphic_column
           add_column table_name, :supplier_type, :string
           add_index table_name, [:supplier_id, :supplier_type]

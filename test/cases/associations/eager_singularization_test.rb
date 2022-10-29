@@ -2,28 +2,28 @@
 
 require "cases/helper"
 
-class EagerSingularizationTest < SecondaryActiveRecord::TestCase
-  class Virus < SecondaryActiveRecord::Base
+class EagerSingularizationTest < ActiveRecord::TestCase
+  class Virus < ActiveRecord::Base
     belongs_to :octopus
   end
 
-  class Octopus < SecondaryActiveRecord::Base
+  class Octopus < ActiveRecord::Base
     has_one :virus
   end
 
-  class Pass < SecondaryActiveRecord::Base
+  class Pass < ActiveRecord::Base
     belongs_to :bus
   end
 
-  class Bus < SecondaryActiveRecord::Base
+  class Bus < ActiveRecord::Base
     has_many :passes
   end
 
-  class Mess < SecondaryActiveRecord::Base
+  class Mess < ActiveRecord::Base
     has_and_belongs_to_many :crises
   end
 
-  class Crisis < SecondaryActiveRecord::Base
+  class Crisis < ActiveRecord::Base
     has_and_belongs_to_many :messes
     has_many :analyses, dependent: :destroy
     has_many :successes, through: :analyses
@@ -31,22 +31,22 @@ class EagerSingularizationTest < SecondaryActiveRecord::TestCase
     has_many :compresses, through: :dresses
   end
 
-  class Analysis < SecondaryActiveRecord::Base
+  class Analysis < ActiveRecord::Base
     belongs_to :crisis
     belongs_to :success
   end
 
-  class Success < SecondaryActiveRecord::Base
+  class Success < ActiveRecord::Base
     has_many :analyses, dependent: :destroy
     has_many :crises, through: :analyses
   end
 
-  class Dress < SecondaryActiveRecord::Base
+  class Dress < ActiveRecord::Base
     belongs_to :crisis
     has_many :compresses
   end
 
-  class Compress < SecondaryActiveRecord::Base
+  class Compress < ActiveRecord::Base
     belongs_to :dress
   end
 
@@ -143,6 +143,6 @@ class EagerSingularizationTest < SecondaryActiveRecord::TestCase
 
   private
     def connection
-      SecondaryActiveRecord::Base.connection
+      ActiveRecord::Base.connection
     end
 end

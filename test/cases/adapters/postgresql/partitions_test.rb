@@ -2,9 +2,9 @@
 
 require "cases/helper"
 
-class PostgreSQLPartitionsTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgreSQLPartitionsTest < ActiveRecord::PostgreSQLTestCase
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   def teardown
@@ -12,7 +12,7 @@ class PostgreSQLPartitionsTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_partitions_table_exists
-    skip unless SecondaryActiveRecord::Base.connection.postgresql_version >= 100000
+    skip unless ActiveRecord::Base.connection.database_version >= 100000
     @connection.create_table :partitioned_events, force: true, id: false,
       options: "partition by range (issued_at)" do |t|
       t.timestamp :issued_at

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Tyre < SecondaryActiveRecord::Base
+class Tyre < ActiveRecord::Base
   belongs_to :car
 
   def self.custom_find(id)

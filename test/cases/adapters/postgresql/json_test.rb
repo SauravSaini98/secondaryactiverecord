@@ -13,7 +13,7 @@ module PostgresqlJSONSharedTestCases
       t.public_send column_type, "settings"             # t.json 'settings'
       t.public_send column_type, "objects", array: true # t.json 'objects', array: true
     end
-  rescue SecondaryActiveRecord::StatementInvalid
+  rescue ActiveRecord::StatementInvalid
     skip "do not test on PostgreSQL without #{column_type} type."
   end
 
@@ -35,7 +35,7 @@ module PostgresqlJSONSharedTestCases
   end
 end
 
-class PostgresqlJSONTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlJSONTest < ActiveRecord::PostgreSQLTestCase
   include PostgresqlJSONSharedTestCases
 
   def column_type
@@ -43,7 +43,7 @@ class PostgresqlJSONTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 end
 
-class PostgresqlJSONBTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlJSONBTest < ActiveRecord::PostgreSQLTestCase
   include PostgresqlJSONSharedTestCases
 
   def column_type

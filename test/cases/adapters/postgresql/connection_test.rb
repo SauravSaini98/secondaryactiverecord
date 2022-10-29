@@ -3,11 +3,11 @@
 require "cases/helper"
 require "support/connection_helper"
 
-module SecondaryActiveRecord
-  class PostgresqlConnectionTest < SecondaryActiveRecord::PostgreSQLTestCase
+module ActiveRecord
+  class PostgresqlConnectionTest < ActiveRecord::PostgreSQLTestCase
     include ConnectionHelper
 
-    class NonExistentTable < SecondaryActiveRecord::Base
+    class NonExistentTable < ActiveRecord::Base
     end
 
     fixtures :comments
@@ -15,8 +15,9 @@ module SecondaryActiveRecord
     def setup
       super
       @subscriber = SQLSubscriber.new
-      @subscription = ActiveSupport::Notifications.subscribe("sql.secondary_active_record", @subscriber)
-      @connection = SecondaryActiveRecord::Base.connection
+      @connection = ActiveRecord::Base.connection
+      @connection.materialize_transactions
+      @subscription = ActiveSupport::Notifications.subscribe("sql.active_record", @subscriber)
     end
 
     def teardown
@@ -24,28 +25,20 @@ module SecondaryActiveRecord
       super
     end
 
-    def test_truncate
-      count = SecondaryActiveRecord::Base.connection.execute("select count(*) from comments").first["count"].to_i
-      assert_operator count, :>, 0
-      SecondaryActiveRecord::Base.connection.truncate("comments")
-      count = SecondaryActiveRecord::Base.connection.execute("select count(*) from comments").first["count"].to_i
-      assert_equal 0, count
-    end
-
     def test_encoding
-      assert_queries(1) do
+      assert_queries(1, ignore_none: true) do
         assert_not_nil @connection.encoding
       end
     end
 
     def test_collation
-      assert_queries(1) do
+      assert_queries(1, ignore_none: true) do
         assert_not_nil @connection.collation
       end
     end
 
     def test_ctype
-      assert_queries(1) do
+      assert_queries(1, ignore_none: true) do
         assert_not_nil @connection.ctype
       end
     end
@@ -57,7 +50,7 @@ module SecondaryActiveRecord
     # Ensure, we can set connection params using the example of Generic
     # Query Optimizer (geqo). It is 'on' per default.
     def test_connection_options
-      params = SecondaryActiveRecord::Base.connection_config.dup
+      params = ActiveRecord::Base.connection_db_config.configuration_hash.dup
       params[:options] = "-c geqo=off"
       NonExistentTable.establish_connection(params)
 
@@ -133,7 +126,7 @@ module SecondaryActiveRecord
       assert_equal "SCHEMA", @subscriber.logged[0][1]
     end
 
-    if SecondaryActiveRecord::Base.connection.prepared_statements
+    if ActiveRecord::Base.connection.prepared_statements
       def test_statement_key_is_logged
         bind = Relation::QueryAttribute.new(nil, 1, Type::Value.new)
         @connection.exec_query("SELECT $1::integer", "SQL", [bind], prepare: true)
@@ -145,34 +138,15 @@ module SecondaryActiveRecord
       end
     end
 
-    # Must have PostgreSQL >= 9.2, or with_manual_interventions set to
-    # true for this test to run.
-    #
-    # When prompted, restart the PostgreSQL server with the
-    # "-m fast" option or kill the individual connection assuming
-    # you know the incantation to do that.
-    # To restart PostgreSQL 9.1 on OS X, installed via MacPorts, ...
-    # sudo su postgres -c "pg_ctl restart -D /opt/local/var/db/postgresql91/defaultdb/ -m fast"
     def test_reconnection_after_actual_disconnection_with_verify
       original_connection_pid = @connection.query("select pg_backend_pid()")
 
-      # Sanity check.
+      # Double check we are connected to begin with
       assert_predicate @connection, :active?
 
-      if @connection.send(:postgresql_version) >= 90200
-        secondary_connection = SecondaryActiveRecord::Base.connection_pool.checkout
-        secondary_connection.query("select pg_terminate_backend(#{original_connection_pid.first.first})")
-        SecondaryActiveRecord::Base.connection_pool.checkin(secondary_connection)
-      elsif ARTest.config["with_manual_interventions"]
-        puts "Kill the connection now (e.g. by restarting the PostgreSQL " \
-          'server with the "-m fast" option) and then press enter.'
-        $stdin.gets
-      else
-        # We're not capable of terminating the backend ourselves, and
-        # we're not allowed to seek assistance; bail out without
-        # actually testing anything.
-        return
-      end
+      secondary_connection = ActiveRecord::Base.connection_pool.checkout
+      secondary_connection.query("select pg_terminate_backend(#{original_connection_pid.first.first})")
+      ActiveRecord::Base.connection_pool.checkin(secondary_connection)
 
       @connection.verify!
 
@@ -192,16 +166,16 @@ module SecondaryActiveRecord
 
     def test_set_session_variable_true
       run_without_connection do |orig_connection|
-        SecondaryActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: true }))
-        set_true = SecondaryActiveRecord::Base.connection.exec_query "SHOW DEBUG_PRINT_PLAN"
+        ActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: true }))
+        set_true = ActiveRecord::Base.connection.exec_query "SHOW DEBUG_PRINT_PLAN"
         assert_equal set_true.rows, [["on"]]
       end
     end
 
     def test_set_session_variable_false
       run_without_connection do |orig_connection|
-        SecondaryActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: false }))
-        set_false = SecondaryActiveRecord::Base.connection.exec_query "SHOW DEBUG_PRINT_PLAN"
+        ActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: false }))
+        set_false = ActiveRecord::Base.connection.exec_query "SHOW DEBUG_PRINT_PLAN"
         assert_equal set_false.rows, [["off"]]
       end
     end
@@ -209,27 +183,27 @@ module SecondaryActiveRecord
     def test_set_session_variable_nil
       run_without_connection do |orig_connection|
         # This should be a no-op that does not raise an error
-        SecondaryActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: nil }))
+        ActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: nil }))
       end
     end
 
     def test_set_session_variable_default
       run_without_connection do |orig_connection|
         # This should execute a query that does not raise an error
-        SecondaryActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: :default }))
+        ActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { debug_print_plan: :default }))
       end
     end
 
     def test_set_session_timezone
       run_without_connection do |orig_connection|
-        SecondaryActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { timezone: "America/New_York" }))
-        assert_equal "America/New_York", SecondaryActiveRecord::Base.connection.query_value("SHOW TIME ZONE")
+        ActiveRecord::Base.establish_connection(orig_connection.deep_merge(variables: { timezone: "America/New_York" }))
+        assert_equal "America/New_York", ActiveRecord::Base.connection.query_value("SHOW TIME ZONE")
       end
     end
 
     def test_get_and_release_advisory_lock
       lock_id = 5295901941911233559
-      list_advisory_locks = <<-SQL
+      list_advisory_locks = <<~SQL
         SELECT locktype,
               (classid::bigint << 32) | objid::bigint AS lock_id
         FROM pg_locks
@@ -261,7 +235,6 @@ module SecondaryActiveRecord
     end
 
     private
-
       def with_warning_suppression
         log_level = @connection.client_min_messages
         @connection.client_min_messages = "error"

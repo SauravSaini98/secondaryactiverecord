@@ -4,14 +4,14 @@ require "cases/helper"
 require "support/connection_helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlBitStringTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlBitStringTest < ActiveRecord::PostgreSQLTestCase
   include ConnectionHelper
   include SchemaDumpingHelper
 
-  class PostgresqlBitString < SecondaryActiveRecord::Base; end
+  class PostgresqlBitString < ActiveRecord::Base; end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("postgresql_bit_strings", force: true) do |t|
       t.bit :a_bit, default: "00000011", limit: 8
       t.bit_varying :a_bit_varying, default: "0011", limit: 4
@@ -59,10 +59,10 @@ class PostgresqlBitStringTest < SecondaryActiveRecord::PostgreSQLTestCase
     assert_match %r{t\.bit_varying\s+"a_bit_varying",\s+limit: 4,\s+default: "0011"$}, output
   end
 
-  if SecondaryActiveRecord::Base.connection.prepared_statements
+  if ActiveRecord::Base.connection.prepared_statements
     def test_assigning_invalid_hex_string_raises_exception
-      assert_raises(SecondaryActiveRecord::StatementInvalid) { PostgresqlBitString.create! a_bit: "FF" }
-      assert_raises(SecondaryActiveRecord::StatementInvalid) { PostgresqlBitString.create! a_bit_varying: "F" }
+      assert_raises(ActiveRecord::StatementInvalid) { PostgresqlBitString.create! a_bit: "FF" }
+      assert_raises(ActiveRecord::StatementInvalid) { PostgresqlBitString.create! a_bit_varying: "F" }
     end
   end
 

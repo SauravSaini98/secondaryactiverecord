@@ -2,14 +2,14 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class IndexTest < SecondaryActiveRecord::TestCase
+    class IndexTest < ActiveRecord::TestCase
       attr_reader :connection, :table_name
 
       def setup
         super
-        @connection = SecondaryActiveRecord::Base.connection
+        @connection = ActiveRecord::Base.connection
         @table_name = :testings
 
         connection.create_table table_name do |t|
@@ -25,13 +25,22 @@ module SecondaryActiveRecord
 
       teardown do
         connection.drop_table :testings rescue nil
-        SecondaryActiveRecord::Base.primary_key_prefix_type = nil
+        ActiveRecord::Base.primary_key_prefix_type = nil
       end
 
       def test_rename_index
         # keep the names short to make Oracle and similar behave
         connection.add_index(table_name, [:foo], name: "old_idx")
         connection.rename_index(table_name, "old_idx", "new_idx")
+
+        assert_not connection.index_name_exists?(table_name, "old_idx")
+        assert connection.index_name_exists?(table_name, "new_idx")
+      end
+
+      def test_rename_index_with_symbol
+        # keep the names short to make Oracle and similar behave
+        connection.add_index(table_name, [:foo], name: :old_idx)
+        connection.rename_index(table_name, :old_idx, :new_idx)
 
         assert_not connection.index_name_exists?(table_name, "old_idx")
         assert connection.index_name_exists?(table_name, "new_idx")
@@ -44,16 +53,9 @@ module SecondaryActiveRecord
         e = assert_raises(ArgumentError) {
           connection.rename_index(table_name, "old_idx", too_long_index_name)
         }
-        assert_match(/too long; the limit is #{connection.allowed_index_name_length} characters/, e.message)
+        assert_match(/too long; the limit is #{connection.index_name_length} characters/, e.message)
 
         assert connection.index_name_exists?(table_name, "old_idx")
-      end
-
-      def test_double_add_index
-        connection.add_index(table_name, [:foo], name: "some_idx")
-        assert_raises(ArgumentError) {
-          connection.add_index(table_name, [:foo], name: "some_idx")
-        }
       end
 
       def test_remove_nonexistent_index
@@ -73,10 +75,69 @@ module SecondaryActiveRecord
         e = assert_raises(ArgumentError) {
           connection.add_index(table_name, "foo", name: too_long_index_name)
         }
-        assert_match(/too long; the limit is #{connection.allowed_index_name_length} characters/, e.message)
+        assert_match(/too long; the limit is #{connection.index_name_length} characters/, e.message)
 
         assert_not connection.index_name_exists?(table_name, too_long_index_name)
         connection.add_index(table_name, "foo", name: good_index_name)
+      end
+
+      def test_add_index_which_already_exists_does_not_raise_error_with_option
+        connection.add_index(table_name, "foo")
+
+        assert_nothing_raised do
+          connection.add_index(table_name, "foo", if_not_exists: true)
+        end
+
+        assert connection.index_name_exists?(table_name, "index_testings_on_foo")
+      end
+
+      def test_add_index_with_if_not_exists_matches_exact_index
+        connection.add_index(table_name, [:foo, :bar], unique: false, name: "index_testings_on_foo_bar")
+
+        assert connection.index_name_exists?(table_name, "index_testings_on_foo_bar")
+
+        assert_nothing_raised do
+          connection.add_index(table_name, [:foo, :bar], unique: true, if_not_exists: true)
+        end
+
+        assert connection.index_name_exists?(table_name, "index_testings_on_foo_and_bar")
+      end
+
+      def test_remove_index_which_does_not_exist_doesnt_raise_with_option
+        connection.add_index(table_name, "foo")
+
+        connection.remove_index(table_name, "foo")
+
+        assert_raises ArgumentError do
+          connection.remove_index(table_name, "foo")
+        end
+
+        assert_nothing_raised do
+          connection.remove_index(table_name, "foo", if_exists: true)
+        end
+      end
+
+      def test_remove_index_with_name_which_does_not_exist_doesnt_raise_with_option
+        connection.add_index(table_name, [:foo], name: "foo")
+
+        assert connection.index_exists?(table_name, :foo, name: "foo")
+
+        connection.remove_index(table_name, nil, name: "foo", if_exists: true)
+
+        assert_not connection.index_exists?(table_name, :foo, name: "foo")
+      end
+
+      def test_remove_index_with_column_array_which_does_not_exist_doesnt_raise_with_option
+        connection.add_index(table_name, [:foo], name: "foo")
+
+        assert connection.index_exists?(table_name, :foo, name: "foo")
+
+        assert_nothing_raised do
+          connection.remove_index(table_name, column: [:foo, :bar], if_exists: true)
+        end
+
+        assert connection.index_exists?(table_name, :foo, name: "foo")
+        assert_not connection.index_exists?(table_name, nil, column: [:foo, :bar], name: "foo")
       end
 
       def test_internal_index_with_name_matching_database_limit
@@ -99,7 +160,7 @@ module SecondaryActiveRecord
         connection.add_index :testings, :foo
 
         assert connection.index_exists?(:testings, :foo)
-        assert !connection.index_exists?(:testings, :bar)
+        assert_not connection.index_exists?(:testings, :bar)
       end
 
       def test_index_exists_on_multiple_columns
@@ -131,15 +192,18 @@ module SecondaryActiveRecord
 
         assert connection.index_exists?(:testings, :foo)
         assert connection.index_exists?(:testings, :foo, name: "custom_index_name")
-        assert !connection.index_exists?(:testings, :foo, name: "other_index_name")
+        assert_not connection.index_exists?(:testings, :foo, name: "other_index_name")
       end
 
       def test_remove_named_index
-        connection.add_index :testings, :foo, name: "custom_index_name"
+        connection.add_index :testings, :foo, name: "index_testings_on_custom_index_name"
 
         assert connection.index_exists?(:testings, :foo)
+
+        assert_raise(ArgumentError) { connection.remove_index(:testings, "custom_index_name") }
+
         connection.remove_index :testings, :foo
-        assert !connection.index_exists?(:testings, :foo)
+        assert_not connection.index_exists?(:testings, :foo)
       end
 
       def test_add_index_attribute_length_limit
@@ -155,14 +219,11 @@ module SecondaryActiveRecord
         connection.add_index("testings", ["last_name", "first_name"])
         connection.remove_index("testings", column: ["last_name", "first_name"])
 
-        # Oracle adapter cannot have specified index name larger than 30 characters
-        # Oracle adapter is shortening index name when just column list is given
-        unless current_adapter?(:OracleAdapter)
-          connection.add_index("testings", ["last_name", "first_name"])
-          connection.remove_index("testings", name: :index_testings_on_last_name_and_first_name)
-          connection.add_index("testings", ["last_name", "first_name"])
-          connection.remove_index("testings", "last_name_and_first_name")
-        end
+        connection.add_index("testings", ["last_name", "first_name"])
+        connection.remove_index("testings", name: :index_testings_on_last_name_and_first_name)
+        connection.add_index("testings", ["last_name", "first_name"])
+        connection.remove_index("testings", "last_name_and_first_name")
+
         connection.add_index("testings", ["last_name", "first_name"])
         connection.remove_index("testings", ["last_name", "first_name"])
 
@@ -177,6 +238,9 @@ module SecondaryActiveRecord
 
         connection.add_index("testings", ["last_name", "first_name"], length: { last_name: 10, first_name: 20 })
         connection.remove_index("testings", ["last_name", "first_name"])
+
+        connection.add_index("testings", "key", unique: true)
+        connection.remove_index("testings", "key", unique: true)
 
         connection.add_index("testings", ["key"], name: "key_idx", unique: true)
         connection.remove_index("testings", name: "key_idx", unique: true)
@@ -203,13 +267,13 @@ module SecondaryActiveRecord
           assert connection.index_exists?("testings", "last_name")
 
           connection.remove_index("testings", "last_name")
-          assert !connection.index_exists?("testings", "last_name")
+          assert_not connection.index_exists?("testings", "last_name")
         end
       end
 
       private
         def good_index_name
-          "x" * connection.allowed_index_name_length
+          "x" * connection.index_name_length
         end
     end
   end

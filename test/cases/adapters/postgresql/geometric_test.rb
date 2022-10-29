@@ -4,11 +4,11 @@ require "cases/helper"
 require "support/connection_helper"
 require "support/schema_dumping_helper"
 
-class PostgresqlPointTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlPointTest < ActiveRecord::PostgreSQLTestCase
   include ConnectionHelper
   include SchemaDumpingHelper
 
-  class PostgresqlPoint < SecondaryActiveRecord::Base
+  class PostgresqlPoint < ActiveRecord::Base
     attribute :x, :point
     attribute :y, :point
     attribute :z, :point
@@ -19,7 +19,7 @@ class PostgresqlPointTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("postgresql_points") do |t|
       t.point :x
       t.point :y, default: [12.2, 13.3]
@@ -46,11 +46,11 @@ class PostgresqlPointTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_default
-    assert_equal SecondaryActiveRecord::Point.new(12.2, 13.3), PostgresqlPoint.column_defaults["y"]
-    assert_equal SecondaryActiveRecord::Point.new(12.2, 13.3), PostgresqlPoint.new.y
+    assert_equal ActiveRecord::Point.new(12.2, 13.3), PostgresqlPoint.column_defaults["y"]
+    assert_equal ActiveRecord::Point.new(12.2, 13.3), PostgresqlPoint.new.y
 
-    assert_equal SecondaryActiveRecord::Point.new(14.4, 15.5), PostgresqlPoint.column_defaults["z"]
-    assert_equal SecondaryActiveRecord::Point.new(14.4, 15.5), PostgresqlPoint.new.z
+    assert_equal ActiveRecord::Point.new(14.4, 15.5), PostgresqlPoint.column_defaults["z"]
+    assert_equal ActiveRecord::Point.new(14.4, 15.5), PostgresqlPoint.new.z
   end
 
   def test_schema_dumping
@@ -63,35 +63,35 @@ class PostgresqlPointTest < SecondaryActiveRecord::PostgreSQLTestCase
   def test_roundtrip
     PostgresqlPoint.create! x: [10, 25.2]
     record = PostgresqlPoint.first
-    assert_equal SecondaryActiveRecord::Point.new(10, 25.2), record.x
+    assert_equal ActiveRecord::Point.new(10, 25.2), record.x
 
-    record.x = SecondaryActiveRecord::Point.new(1.1, 2.2)
+    record.x = ActiveRecord::Point.new(1.1, 2.2)
     record.save!
     assert record.reload
-    assert_equal SecondaryActiveRecord::Point.new(1.1, 2.2), record.x
+    assert_equal ActiveRecord::Point.new(1.1, 2.2), record.x
   end
 
   def test_mutation
-    p = PostgresqlPoint.create! x: SecondaryActiveRecord::Point.new(10, 20)
+    p = PostgresqlPoint.create! x: ActiveRecord::Point.new(10, 20)
 
     p.x.y = 25
     p.save!
     p.reload
 
-    assert_equal SecondaryActiveRecord::Point.new(10.0, 25.0), p.x
+    assert_equal ActiveRecord::Point.new(10.0, 25.0), p.x
     assert_not_predicate p, :changed?
   end
 
   def test_array_assignment
     p = PostgresqlPoint.new(x: [1, 2])
 
-    assert_equal SecondaryActiveRecord::Point.new(1, 2), p.x
+    assert_equal ActiveRecord::Point.new(1, 2), p.x
   end
 
   def test_string_assignment
     p = PostgresqlPoint.new(x: "(1, 2)")
 
-    assert_equal SecondaryActiveRecord::Point.new(1, 2), p.x
+    assert_equal ActiveRecord::Point.new(1, 2), p.x
   end
 
   def test_empty_string_assignment
@@ -101,9 +101,9 @@ class PostgresqlPointTest < SecondaryActiveRecord::PostgreSQLTestCase
 
   def test_array_of_points_round_trip
     expected_value = [
-      SecondaryActiveRecord::Point.new(1, 2),
-      SecondaryActiveRecord::Point.new(2, 3),
-      SecondaryActiveRecord::Point.new(3, 4),
+      ActiveRecord::Point.new(1, 2),
+      ActiveRecord::Point.new(2, 3),
+      ActiveRecord::Point.new(3, 4),
     ]
     p = PostgresqlPoint.new(array_of_points: expected_value)
 
@@ -161,13 +161,13 @@ class PostgresqlPointTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 end
 
-class PostgresqlGeometricTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlGeometricTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
-  class PostgresqlGeometric < SecondaryActiveRecord::Base; end
+  class PostgresqlGeometric < ActiveRecord::Base; end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("postgresql_geometrics") do |t|
       t.lseg    :a_line_segment
       t.box     :a_box
@@ -241,16 +241,16 @@ class PostgresqlGeometricTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 end
 
-class PostgreSQLGeometricLineTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgreSQLGeometricLineTest < ActiveRecord::PostgreSQLTestCase
   include SchemaDumpingHelper
 
-  class PostgresqlLine < SecondaryActiveRecord::Base; end
+  class PostgresqlLine < ActiveRecord::Base; end
 
   setup do
-    unless SecondaryActiveRecord::Base.connection.send(:postgresql_version) >= 90400
+    unless ActiveRecord::Base.connection.database_version >= 90400
       skip("line type is not fully implemented")
     end
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table("postgresql_lines") do |t|
       t.line :a_line
     end
@@ -288,12 +288,12 @@ class PostgreSQLGeometricLineTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 end
 
-class PostgreSQLGeometricTypesTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgreSQLGeometricTypesTest < ActiveRecord::PostgreSQLTestCase
   attr_reader :connection, :table_name
 
   def setup
     super
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @table_name = :testings
   end
 
@@ -361,7 +361,6 @@ class PostgreSQLGeometricTypesTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   private
-
     def assert_column_exists(column_name)
       assert connection.column_exists?(table_name, column_name)
     end

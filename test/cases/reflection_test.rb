@@ -26,9 +26,10 @@ require "models/department"
 require "models/cake_designer"
 require "models/drink_designer"
 require "models/recipe"
+require "models/user_with_invalid_relation"
 
-class ReflectionTest < SecondaryActiveRecord::TestCase
-  include SecondaryActiveRecord::Reflection
+class ReflectionTest < ActiveRecord::TestCase
+  include ActiveRecord::Reflection
 
   fixtures :topics, :customers, :companies, :subscribers, :price_estimates
 
@@ -69,13 +70,15 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
     assert_equal :string, @first.column_for_attribute(:title).type
     assert_equal :string, @first.type_for_attribute("title").type
     assert_equal :string, @first.type_for_attribute(:title).type
+    assert_equal :string, @first.type_for_attribute("heading").type
+    assert_equal :string, @first.type_for_attribute(:heading).type
     assert_equal 250, @first.column_for_attribute("title").limit
   end
 
   def test_column_null_not_null
     subscriber = Subscriber.first
     assert subscriber.column_for_attribute("name").null
-    assert !subscriber.column_for_attribute("nick").null
+    assert_not subscriber.column_for_attribute("nick").null
   end
 
   def test_human_name_for_column
@@ -91,13 +94,13 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
 
   def test_non_existent_columns_return_null_object
     column = @first.column_for_attribute("attribute_that_doesnt_exist")
-    assert_instance_of SecondaryActiveRecord::ConnectionAdapters::NullColumn, column
+    assert_instance_of ActiveRecord::ConnectionAdapters::NullColumn, column
     assert_equal "attribute_that_doesnt_exist", column.name
     assert_nil column.sql_type
     assert_nil column.type
 
     column = @first.column_for_attribute(:attribute_that_doesnt_exist)
-    assert_instance_of SecondaryActiveRecord::ConnectionAdapters::NullColumn, column
+    assert_instance_of ActiveRecord::ConnectionAdapters::NullColumn, column
   end
 
   def test_non_existent_types_are_identity_types
@@ -115,7 +118,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_reflection_klass_for_nested_class_name
-    reflection = SecondaryActiveRecord::Reflection.create(
+    reflection = ActiveRecord::Reflection.create(
       :has_many,
       nil,
       nil,
@@ -131,8 +134,21 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
     ActiveSupport::Inflector.inflections do |inflect|
       inflect.irregular "plural_irregular", "plurales_irregulares"
     end
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, "plurales_irregulares", nil, {}, SecondaryActiveRecord::Base)
+    reflection = ActiveRecord::Reflection.create(:has_many, "plurales_irregulares", nil, {}, ActiveRecord::Base)
     assert_equal "PluralIrregular", reflection.class_name
+  end
+
+  def test_reflection_klass_is_not_ar_subclass
+    [:account_invalid,
+     :account_class_name,
+     :info_invalids,
+     :infos_class_name,
+     :infos_through_class_name,
+    ].each do |rel|
+      assert_raise(ArgumentError) do
+        UserWithInvalidRelation.reflect_on_association(rel).klass
+      end
+    end
   end
 
   def test_aggregation_reflection
@@ -169,7 +185,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_has_many_reflection
-    reflection_for_clients = SecondaryActiveRecord::Reflection.create(:has_many, :clients, nil, { order: "id", dependent: :destroy }, Firm)
+    reflection_for_clients = ActiveRecord::Reflection.create(:has_many, :clients, nil, { order: "id", dependent: :destroy }, Firm)
 
     assert_equal reflection_for_clients, Firm.reflect_on_association(:clients)
 
@@ -181,7 +197,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_has_one_reflection
-    reflection_for_account = SecondaryActiveRecord::Reflection.create(:has_one, :account, nil, { foreign_key: "firm_id", dependent: :destroy }, Firm)
+    reflection_for_account = ActiveRecord::Reflection.create(:has_one, :account, nil, { foreign_key: "firm_id", dependent: :destroy }, Firm)
     assert_equal reflection_for_account, Firm.reflect_on_association(:account)
 
     assert_equal Account, Firm.reflect_on_association(:account).klass
@@ -198,7 +214,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_association_reflection_in_modules
-    SecondaryActiveRecord::Base.store_full_sti_class = false
+    ActiveRecord::Base.store_full_sti_class = false
 
     assert_reflection MyApplication::Business::Firm,
       :clients_of_firm,
@@ -236,7 +252,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
       class_name: "Nested::Firm",
       table_name: "companies"
   ensure
-    SecondaryActiveRecord::Base.store_full_sti_class = true
+    ActiveRecord::Base.store_full_sti_class = true
   end
 
   def test_reflection_should_not_raise_error_when_compared_to_other_object
@@ -244,7 +260,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_reflections_should_return_keys_as_strings
-    assert Category.reflections.keys.all? { |key| key.is_a? String }, "Model.reflections is expected to return string for keys"
+    assert Category.reflections.keys.all?(String), "Model.reflections is expected to return string for keys"
   end
 
   def test_has_and_belongs_to_many_reflection
@@ -326,7 +342,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   def test_association_primary_key
     # Normal association
     assert_equal "id",   Author.reflect_on_association(:posts).association_primary_key.to_s
-    assert_equal "name", Author.reflect_on_association(:essay).association_primary_key.to_s
+    assert_equal "id",   Author.reflect_on_association(:essay).association_primary_key.to_s
     assert_equal "name", Essay.reflect_on_association(:writer).association_primary_key.to_s
 
     # Through association (uses the :primary_key option from the source reflection)
@@ -336,13 +352,13 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_association_primary_key_raises_when_missing_primary_key
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :edge, nil, {}, Author)
-    assert_raises(SecondaryActiveRecord::UnknownPrimaryKey) { reflection.association_primary_key }
+    reflection = ActiveRecord::Reflection.create(:has_many, :edge, nil, {}, Author)
+    assert_raises(ActiveRecord::UnknownPrimaryKey) { reflection.association_primary_key }
 
-    through = Class.new(SecondaryActiveRecord::Reflection::ThroughReflection) {
+    through = Class.new(ActiveRecord::Reflection::ThroughReflection) {
       define_method(:source_reflection) { reflection }
     }.new(reflection)
-    assert_raises(SecondaryActiveRecord::UnknownPrimaryKey) { through.association_primary_key }
+    assert_raises(ActiveRecord::UnknownPrimaryKey) { through.association_primary_key }
   end
 
   def test_active_record_primary_key
@@ -351,8 +367,8 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_active_record_primary_key_raises_when_missing_primary_key
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :author, nil, {}, Edge)
-    assert_raises(SecondaryActiveRecord::UnknownPrimaryKey) { reflection.active_record_primary_key }
+    reflection = ActiveRecord::Reflection.create(:has_many, :author, nil, {}, Edge)
+    assert_raises(ActiveRecord::UnknownPrimaryKey) { reflection.active_record_primary_key }
   end
 
   def test_type
@@ -376,33 +392,37 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
   end
 
   def test_default_association_validation
-    assert_predicate SecondaryActiveRecord::Reflection.create(:has_many, :clients, nil, {}, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:has_many, :clients, nil, {}, Firm), :validate?
 
-    assert_not_predicate SecondaryActiveRecord::Reflection.create(:has_one, :client, nil, {}, Firm), :validate?
-    assert_not_predicate SecondaryActiveRecord::Reflection.create(:belongs_to, :client, nil, {}, Firm), :validate?
+    assert_not_predicate ActiveRecord::Reflection.create(:has_one, :client, nil, {}, Firm), :validate?
+    assert_not_predicate ActiveRecord::Reflection.create(:belongs_to, :client, nil, {}, Firm), :validate?
   end
 
   def test_always_validate_association_if_explicit
-    assert_predicate SecondaryActiveRecord::Reflection.create(:has_one, :client, nil, { validate: true }, Firm), :validate?
-    assert_predicate SecondaryActiveRecord::Reflection.create(:belongs_to, :client, nil, { validate: true }, Firm), :validate?
-    assert_predicate SecondaryActiveRecord::Reflection.create(:has_many, :clients, nil, { validate: true }, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:has_one, :client, nil, { validate: true }, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:belongs_to, :client, nil, { validate: true }, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:has_many, :clients, nil, { validate: true }, Firm), :validate?
   end
 
   def test_validate_association_if_autosave
-    assert_predicate SecondaryActiveRecord::Reflection.create(:has_one, :client, nil, { autosave: true }, Firm), :validate?
-    assert_predicate SecondaryActiveRecord::Reflection.create(:belongs_to, :client, nil, { autosave: true }, Firm), :validate?
-    assert_predicate SecondaryActiveRecord::Reflection.create(:has_many, :clients, nil, { autosave: true }, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:has_one, :client, nil, { autosave: true }, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:belongs_to, :client, nil, { autosave: true }, Firm), :validate?
+    assert_predicate ActiveRecord::Reflection.create(:has_many, :clients, nil, { autosave: true }, Firm), :validate?
   end
 
   def test_never_validate_association_if_explicit
-    assert_not_predicate SecondaryActiveRecord::Reflection.create(:has_one, :client, nil, { autosave: true, validate: false }, Firm), :validate?
-    assert_not_predicate SecondaryActiveRecord::Reflection.create(:belongs_to, :client, nil, { autosave: true, validate: false }, Firm), :validate?
-    assert_not_predicate SecondaryActiveRecord::Reflection.create(:has_many, :clients, nil, { autosave: true, validate: false }, Firm), :validate?
+    assert_not_predicate ActiveRecord::Reflection.create(:has_one, :client, nil, { autosave: true, validate: false }, Firm), :validate?
+    assert_not_predicate ActiveRecord::Reflection.create(:belongs_to, :client, nil, { autosave: true, validate: false }, Firm), :validate?
+    assert_not_predicate ActiveRecord::Reflection.create(:has_many, :clients, nil, { autosave: true, validate: false }, Firm), :validate?
   end
 
   def test_foreign_key
     assert_equal "author_id", Author.reflect_on_association(:posts).foreign_key.to_s
     assert_equal "category_id", Post.reflect_on_association(:categorizations).foreign_key.to_s
+  end
+
+  def test_foreign_key_is_inferred_from_model_name
+    assert_equal "post_id", PostRecord.reflect_on_association(:comments).foreign_key.to_s
   end
 
   def test_symbol_for_class_name
@@ -411,21 +431,28 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
 
   def test_class_for_class_name
     error = assert_raises(ArgumentError) do
-      SecondaryActiveRecord::Reflection.create(:has_many, :clients, nil, { class_name: Client }, Firm)
+      ActiveRecord::Reflection.create(:has_many, :clients, nil, { class_name: Client }, Firm)
     end
     assert_equal "A class was passed to `:class_name` but we are expecting a string.", error.message
+  end
+
+  def test_class_for_source_type
+    error = assert_raises(ArgumentError) do
+      ActiveRecord::Reflection.create(:has_many, :tagged_posts, nil, { through: :taggings, source: :taggable, source_type: Post }, Tag)
+    end
+    assert_equal "A class was passed to `:source_type` but we are expecting a string.", error.message
   end
 
   def test_join_table
     category = Struct.new(:table_name, :pluralize_table_names).new("categories", true)
     product = Struct.new(:table_name, :pluralize_table_names).new("products", true)
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :categories, nil, {}, product)
+    reflection = ActiveRecord::Reflection.create(:has_many, :categories, nil, {}, product)
     reflection.stub(:klass, category) do
       assert_equal "categories_products", reflection.join_table
     end
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :products, nil, {}, category)
+    reflection = ActiveRecord::Reflection.create(:has_many, :products, nil, {}, category)
     reflection.stub(:klass, product) do
       assert_equal "categories_products", reflection.join_table
     end
@@ -435,12 +462,12 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
     category = Struct.new(:table_name, :pluralize_table_names).new("catalog_categories", true)
     product = Struct.new(:table_name, :pluralize_table_names).new("catalog_products", true)
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :categories, nil, {}, product)
+    reflection = ActiveRecord::Reflection.create(:has_many, :categories, nil, {}, product)
     reflection.stub(:klass, category) do
       assert_equal "catalog_categories_products", reflection.join_table
     end
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :products, nil, {}, category)
+    reflection = ActiveRecord::Reflection.create(:has_many, :products, nil, {}, category)
     reflection.stub(:klass, product) do
       assert_equal "catalog_categories_products", reflection.join_table
     end
@@ -450,12 +477,12 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
     category = Struct.new(:table_name, :pluralize_table_names).new("catalog_categories", true)
     page = Struct.new(:table_name, :pluralize_table_names).new("content_pages", true)
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :categories, nil, {}, page)
+    reflection = ActiveRecord::Reflection.create(:has_many, :categories, nil, {}, page)
     reflection.stub(:klass, category) do
       assert_equal "catalog_categories_content_pages", reflection.join_table
     end
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :pages, nil, {}, category)
+    reflection = ActiveRecord::Reflection.create(:has_many, :pages, nil, {}, category)
     reflection.stub(:klass, page) do
       assert_equal "catalog_categories_content_pages", reflection.join_table
     end
@@ -465,12 +492,12 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
     category = Struct.new(:table_name, :pluralize_table_names).new("categories", true)
     product = Struct.new(:table_name, :pluralize_table_names).new("products", true)
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :categories, nil, { join_table: "product_categories" }, product)
+    reflection = ActiveRecord::Reflection.create(:has_many, :categories, nil, { join_table: "product_categories" }, product)
     reflection.stub(:klass, category) do
       assert_equal "product_categories", reflection.join_table
     end
 
-    reflection = SecondaryActiveRecord::Reflection.create(:has_many, :products, nil, { join_table: "product_categories" }, category)
+    reflection = ActiveRecord::Reflection.create(:has_many, :products, nil, { join_table: "product_categories" }, category)
     reflection.stub(:klass, product) do
       assert_equal "product_categories", reflection.join_table
     end
@@ -512,7 +539,7 @@ class ReflectionTest < SecondaryActiveRecord::TestCase
     def assert_reflection(klass, association, options)
       assert reflection = klass.reflect_on_association(association)
       options.each do |method, value|
-        assert_equal(value, reflection.send(method))
+        assert_equal(value, reflection.public_send(method))
       end
     end
 end

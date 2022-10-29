@@ -5,8 +5,8 @@ require "models/reply"
 require "models/topic"
 require "models/movie"
 
-module SecondaryActiveRecord
-  class DupTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class DupTest < ActiveRecord::TestCase
     fixtures :topics
 
     def test_dup
@@ -17,7 +17,7 @@ module SecondaryActiveRecord
       topic = Topic.first
 
       duped = topic.dup
-      assert !duped.readonly?, "should not be readonly"
+      assert_not duped.readonly?, "should not be readonly"
     end
 
     def test_is_readonly
@@ -32,8 +32,15 @@ module SecondaryActiveRecord
       topic = Topic.first
       duped = topic.dup
 
-      assert !duped.persisted?, "topic not persisted"
+      assert_not duped.persisted?, "topic not persisted"
       assert duped.new_record?, "topic is new"
+    end
+
+    def test_dup_not_previously_new_record
+      topic = Topic.first
+      duped = topic.dup
+
+      assert_not duped.previously_new_record?, "should not be a previously new record"
     end
 
     def test_dup_not_destroyed
@@ -138,9 +145,9 @@ module SecondaryActiveRecord
 
     def test_dup_with_default_scope
       prev_default_scopes = Topic.default_scopes
-      Topic.default_scopes = [proc { Topic.where(approved: true) }]
+      Topic.default_scopes = [ActiveRecord::Scoping::DefaultScope.new(proc { Topic.where(approved: true) })]
       topic = Topic.new(approved: false)
-      assert !topic.dup.approved?, "should not be overridden by default scopes"
+      assert_not topic.dup.approved?, "should not be overridden by default scopes"
     ensure
       Topic.default_scopes = prev_default_scopes
     end
@@ -148,7 +155,7 @@ module SecondaryActiveRecord
     def test_dup_without_primary_key
       skip if current_adapter?(:OracleAdapter)
 
-      klass = Class.new(SecondaryActiveRecord::Base) do
+      klass = Class.new(ActiveRecord::Base) do
         self.table_name = "parrots_pirates"
       end
 
@@ -162,7 +169,7 @@ module SecondaryActiveRecord
     def test_dup_record_not_persisted_after_rollback_transaction
       movie = Movie.new(name: "test")
 
-      assert_raises(SecondaryActiveRecord::RecordInvalid) do
+      assert_raises(ActiveRecord::RecordInvalid) do
         Movie.transaction do
           movie.save!
           duped = movie.dup
@@ -171,7 +178,7 @@ module SecondaryActiveRecord
         end
       end
 
-      assert !movie.persisted?
+      assert_not movie.persisted?
     end
   end
 end

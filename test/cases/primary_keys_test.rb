@@ -11,7 +11,7 @@ require "models/mixed_case_monkey"
 require "models/dashboard"
 require "models/non_primary_key"
 
-class PrimaryKeysTest < SecondaryActiveRecord::TestCase
+class PrimaryKeysTest < ActiveRecord::TestCase
   fixtures :topics, :subscribers, :movies, :mixed_case_monkeys
 
   def test_to_key_with_default_primary_key
@@ -116,20 +116,20 @@ class PrimaryKeysTest < SecondaryActiveRecord::TestCase
   end
 
   def test_primary_key_prefix
-    old_primary_key_prefix_type = SecondaryActiveRecord::Base.primary_key_prefix_type
-    SecondaryActiveRecord::Base.primary_key_prefix_type = :table_name
+    old_primary_key_prefix_type = ActiveRecord::Base.primary_key_prefix_type
+    ActiveRecord::Base.primary_key_prefix_type = :table_name
     Topic.reset_primary_key
     assert_equal "topicid", Topic.primary_key
 
-    SecondaryActiveRecord::Base.primary_key_prefix_type = :table_name_with_underscore
+    ActiveRecord::Base.primary_key_prefix_type = :table_name_with_underscore
     Topic.reset_primary_key
     assert_equal "topic_id", Topic.primary_key
 
-    SecondaryActiveRecord::Base.primary_key_prefix_type = nil
+    ActiveRecord::Base.primary_key_prefix_type = nil
     Topic.reset_primary_key
     assert_equal "id", Topic.primary_key
   ensure
-    SecondaryActiveRecord::Base.primary_key_prefix_type = old_primary_key_prefix_type
+    ActiveRecord::Base.primary_key_prefix_type = old_primary_key_prefix_type
   end
 
   def test_delete_should_quote_pkey
@@ -157,7 +157,7 @@ class PrimaryKeysTest < SecondaryActiveRecord::TestCase
   end
 
   def test_primary_key_returns_value_if_it_exists
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "developers"
     end
 
@@ -165,7 +165,7 @@ class PrimaryKeysTest < SecondaryActiveRecord::TestCase
   end
 
   def test_primary_key_returns_nil_if_it_does_not_exist
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "developers_projects"
     end
 
@@ -173,7 +173,8 @@ class PrimaryKeysTest < SecondaryActiveRecord::TestCase
   end
 
   def test_quoted_primary_key_after_set_primary_key
-    k = Class.new(SecondaryActiveRecord::Base)
+    k = Class.new(ActiveRecord::Base)
+    k.table_name = "bar"
     assert_equal k.connection.quote_column_name("id"), k.quoted_primary_key
     k.primary_key = "foo"
     assert_equal k.connection.quote_column_name("foo"), k.quoted_primary_key
@@ -196,11 +197,19 @@ class PrimaryKeysTest < SecondaryActiveRecord::TestCase
   def test_create_without_primary_key_no_extra_query
     skip if current_adapter?(:OracleAdapter)
 
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "dashboards"
     end
     klass.create! # warmup schema cache
     assert_queries(3, ignore_none: true) { klass.create! }
+  end
+
+  def test_assign_id_raises_error_if_primary_key_doesnt_exist
+    klass = Class.new(ActiveRecord::Base) do
+      self.table_name = "dashboards"
+    end
+    dashboard = klass.new
+    assert_raises(ActiveModel::MissingAttributeError) { dashboard.id = "1" }
   end
 
   if current_adapter?(:PostgreSQLAdapter)
@@ -218,33 +227,33 @@ class PrimaryKeysTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class PrimaryKeyWithNoConnectionTest < SecondaryActiveRecord::TestCase
+class PrimaryKeyWithNoConnectionTest < ActiveRecord::TestCase
   self.use_transactional_tests = false
 
   unless in_memory_db?
     def test_set_primary_key_with_no_connection
-      connection = SecondaryActiveRecord::Base.remove_connection
+      connection = ActiveRecord::Base.remove_connection
 
-      model = Class.new(SecondaryActiveRecord::Base)
+      model = Class.new(ActiveRecord::Base)
       model.primary_key = "foo"
 
       assert_equal "foo", model.primary_key
 
-      SecondaryActiveRecord::Base.establish_connection(connection)
+      ActiveRecord::Base.establish_connection(connection)
 
       assert_equal "foo", model.primary_key
     end
   end
 end
 
-class PrimaryKeyWithAutoIncrementTest < SecondaryActiveRecord::TestCase
+class PrimaryKeyWithAutoIncrementTest < ActiveRecord::TestCase
   self.use_transactional_tests = false
 
-  class AutoIncrement < SecondaryActiveRecord::Base
+  class AutoIncrement < ActiveRecord::Base
   end
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   def teardown
@@ -274,16 +283,16 @@ class PrimaryKeyWithAutoIncrementTest < SecondaryActiveRecord::TestCase
     end
 end
 
-class PrimaryKeyAnyTypeTest < SecondaryActiveRecord::TestCase
+class PrimaryKeyAnyTypeTest < ActiveRecord::TestCase
   include SchemaDumpingHelper
 
   self.use_transactional_tests = false
 
-  class Barcode < SecondaryActiveRecord::Base
+  class Barcode < ActiveRecord::Base
   end
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.create_table(:barcodes, primary_key: "code", id: :string, limit: 42, force: true)
   end
 
@@ -304,26 +313,26 @@ class PrimaryKeyAnyTypeTest < SecondaryActiveRecord::TestCase
 
   test "schema dump primary key includes type and options" do
     schema = dump_table_schema "barcodes"
-    assert_match %r{create_table "barcodes", primary_key: "code", id: :string, limit: 42}, schema
+    assert_match %r/create_table "barcodes", primary_key: "code", id: { type: :string, limit: 42 }/, schema
     assert_no_match %r{t\.index \["code"\]}, schema
   end
 
-  if current_adapter?(:Mysql2Adapter) && subsecond_precision_supported?
+  if current_adapter?(:Mysql2Adapter) && supports_datetime_with_precision?
     test "schema typed primary key column" do
       @connection.create_table(:scheduled_logs, id: :timestamp, precision: 6, force: true)
       schema = dump_table_schema("scheduled_logs")
-      assert_match %r/create_table "scheduled_logs", id: :timestamp, precision: 6/, schema
+      assert_match %r/create_table "scheduled_logs", id: :timestamp.*/, schema
     end
   end
 end
 
-class CompositePrimaryKeyTest < SecondaryActiveRecord::TestCase
+class CompositePrimaryKeyTest < ActiveRecord::TestCase
   include SchemaDumpingHelper
 
   self.use_transactional_tests = false
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
     @connection.schema_cache.clear!
     @connection.create_table(:uber_barcodes, primary_key: ["region", "code"], force: true) do |t|
       t.string :region
@@ -354,12 +363,11 @@ class CompositePrimaryKeyTest < SecondaryActiveRecord::TestCase
   end
 
   def test_composite_primary_key_out_of_order
-    skip if current_adapter?(:SQLite3Adapter)
     assert_equal ["code", "region"], @connection.primary_keys("barcodes_reverse")
   end
 
   def test_primary_key_issues_warning
-    model = Class.new(SecondaryActiveRecord::Base) do
+    model = Class.new(ActiveRecord::Base) do
       def self.table_name
         "uber_barcodes"
       end
@@ -367,7 +375,7 @@ class CompositePrimaryKeyTest < SecondaryActiveRecord::TestCase
     warning = capture(:stderr) do
       assert_nil model.primary_key
     end
-    assert_match(/WARNING: Secondary Active Record does not support composite primary key\./, warning)
+    assert_match(/WARNING: Active Record does not support composite primary key\./, warning)
   end
 
   def test_collectly_dump_composite_primary_key
@@ -376,19 +384,18 @@ class CompositePrimaryKeyTest < SecondaryActiveRecord::TestCase
   end
 
   def test_dumping_composite_primary_key_out_of_order
-    skip if current_adapter?(:SQLite3Adapter)
     schema = dump_table_schema "barcodes_reverse"
     assert_match %r{create_table "barcodes_reverse", primary_key: \["code", "region"\]}, schema
   end
 end
 
-class PrimaryKeyIntegerNilDefaultTest < SecondaryActiveRecord::TestCase
+class PrimaryKeyIntegerNilDefaultTest < ActiveRecord::TestCase
   include SchemaDumpingHelper
 
   self.use_transactional_tests = false
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   def teardown
@@ -410,16 +417,16 @@ class PrimaryKeyIntegerNilDefaultTest < SecondaryActiveRecord::TestCase
 end
 
 if current_adapter?(:PostgreSQLAdapter, :Mysql2Adapter)
-  class PrimaryKeyIntegerTest < SecondaryActiveRecord::TestCase
+  class PrimaryKeyIntegerTest < ActiveRecord::TestCase
     include SchemaDumpingHelper
 
     self.use_transactional_tests = false
 
-    class Widget < SecondaryActiveRecord::Base
+    class Widget < ActiveRecord::Base
     end
 
     setup do
-      @connection = SecondaryActiveRecord::Base.connection
+      @connection = ActiveRecord::Base.connection
       @pk_type = current_adapter?(:PostgreSQLAdapter) ? :serial : :integer
     end
 
@@ -456,7 +463,7 @@ if current_adapter?(:PostgreSQLAdapter, :Mysql2Adapter)
         assert_predicate column, :unsigned?
 
         schema = dump_table_schema "widgets"
-        assert_match %r{create_table "widgets", id: :integer, unsigned: true, }, schema
+        assert_match %r/create_table "widgets", id: { type: :integer, unsigned: true }/, schema
       end
 
       test "bigint primary key with unsigned" do
@@ -468,7 +475,7 @@ if current_adapter?(:PostgreSQLAdapter, :Mysql2Adapter)
         assert_predicate column, :unsigned?
 
         schema = dump_table_schema "widgets"
-        assert_match %r{create_table "widgets", id: :bigint, unsigned: true, }, schema
+        assert_match %r/create_table "widgets", id: { type: :bigint, unsigned: true }/, schema
       end
     end
   end

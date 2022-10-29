@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "secondary_active_record"
+require "active_record"
 
-class Person < SecondaryActiveRecord::Base
+class Person < ActiveRecord::Base
   establish_connection adapter: "sqlite3", database: "foobar.db"
   connection.create_table table_name, force: true do |t|
     t.string :name

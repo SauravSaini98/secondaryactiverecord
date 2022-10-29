@@ -2,8 +2,8 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
-  class ResultTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class ResultTest < ActiveRecord::TestCase
     def result
       Result.new(["col_1", "col_2"], [
         ["row 1 col 1", "row 1 col 2"],
@@ -12,26 +12,55 @@ module SecondaryActiveRecord
       ])
     end
 
+    test "includes_column?" do
+      assert result.includes_column?("col_1")
+      assert_not result.includes_column?("foo")
+    end
+
     test "length" do
       assert_equal 3, result.length
     end
 
-    test "to_hash returns row_hashes" do
+    test "to_a returns row_hashes" do
       assert_equal [
         { "col_1" => "row 1 col 1", "col_2" => "row 1 col 2" },
         { "col_1" => "row 2 col 1", "col_2" => "row 2 col 2" },
         { "col_1" => "row 3 col 1", "col_2" => "row 3 col 2" },
-      ], result.to_hash
+      ], result.to_a
     end
 
     test "first returns first row as a hash" do
       assert_equal(
         { "col_1" => "row 1 col 1", "col_2" => "row 1 col 2" }, result.first)
+      assert_equal [
+        { "col_1" => "row 1 col 1", "col_2" => "row 1 col 2" },
+      ], result.first(1)
+      assert_equal [
+        { "col_1" => "row 1 col 1", "col_2" => "row 1 col 2" },
+        { "col_1" => "row 2 col 1", "col_2" => "row 2 col 2" },
+      ], result.first(2)
+      assert_equal [
+        { "col_1" => "row 1 col 1", "col_2" => "row 1 col 2" },
+        { "col_1" => "row 2 col 1", "col_2" => "row 2 col 2" },
+        { "col_1" => "row 3 col 1", "col_2" => "row 3 col 2" },
+      ], result.first(3)
     end
 
     test "last returns last row as a hash" do
       assert_equal(
         { "col_1" => "row 3 col 1", "col_2" => "row 3 col 2" }, result.last)
+      assert_equal [
+        { "col_1" => "row 3 col 1", "col_2" => "row 3 col 2" },
+      ], result.last(1)
+      assert_equal [
+        { "col_1" => "row 2 col 1", "col_2" => "row 2 col 2" },
+        { "col_1" => "row 3 col 1", "col_2" => "row 3 col 2" },
+      ], result.last(2)
+      assert_equal [
+        { "col_1" => "row 1 col 1", "col_2" => "row 1 col 2" },
+        { "col_1" => "row 2 col 1", "col_2" => "row 2 col 2" },
+        { "col_1" => "row 3 col 1", "col_2" => "row 3 col 2" },
+      ], result.last(3)
     end
 
     test "each with block returns row hashes" do

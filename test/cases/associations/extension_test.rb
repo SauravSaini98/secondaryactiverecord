@@ -8,7 +8,7 @@ require "models/developer"
 require "models/computer"
 require "models/company_in_module"
 
-class AssociationsExtensionsTest < SecondaryActiveRecord::TestCase
+class AssociationsExtensionsTest < ActiveRecord::TestCase
   fixtures :projects, :developers, :developers_projects, :comments, :posts
 
   def test_extension_on_has_many
@@ -25,12 +25,12 @@ class AssociationsExtensionsTest < SecondaryActiveRecord::TestCase
 
   def test_named_two_extensions_on_habtm
     assert_equal projects(:action_controller), developers(:david).projects_extended_by_name_twice.find_most_recent
-    assert_equal projects(:secondary_active_record), developers(:david).projects_extended_by_name_twice.find_least_recent
+    assert_equal projects(:active_record), developers(:david).projects_extended_by_name_twice.find_least_recent
   end
 
   def test_named_extension_and_block_on_habtm
     assert_equal projects(:action_controller), developers(:david).projects_extended_by_name_and_block.find_most_recent
-    assert_equal projects(:secondary_active_record), developers(:david).projects_extended_by_name_and_block.find_least_recent
+    assert_equal projects(:active_record), developers(:david).projects_extended_by_name_and_block.find_least_recent
   end
 
   def test_extension_with_scopes
@@ -70,8 +70,8 @@ class AssociationsExtensionsTest < SecondaryActiveRecord::TestCase
     extend!(Developer)
     extend!(MyApplication::Business::Developer)
 
-    assert Object.const_get "DeveloperAssociationNameAssociationExtension"
-    assert MyApplication::Business.const_get "DeveloperAssociationNameAssociationExtension"
+    assert Developer.const_get "AssociationNameAssociationExtension"
+    assert MyApplication::Business::Developer.const_get "AssociationNameAssociationExtension"
   end
 
   def test_proxy_association_after_scoped
@@ -87,8 +87,7 @@ class AssociationsExtensionsTest < SecondaryActiveRecord::TestCase
   end
 
   private
-
     def extend!(model)
-      SecondaryActiveRecord::Associations::Builder::HasMany.define_extensions(model, :association_name) {}
+      ActiveRecord::Associations::Builder::HasMany.send(:define_extensions, model, :association_name) { }
     end
 end

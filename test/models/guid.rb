@@ -1,4 +1,4 @@
 # frozen_string_literal: true
 
-class Guid < SecondaryActiveRecord::Base
+class Guid < ActiveRecord::Base
 end

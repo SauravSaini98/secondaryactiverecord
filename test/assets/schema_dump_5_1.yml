@@ -1,10 +1,10 @@
---- !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SchemaCache
+--- !ruby/object:ActiveRecord::ConnectionAdapters::SchemaCache
 columns:
   posts:
-  - &1 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &1 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: id
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: INTEGER
       type: :integer
       limit: 
@@ -15,10 +15,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &2 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &2 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: author_id
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -29,10 +29,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &3 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &3 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: title
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: varchar
       type: :string
       limit: 
@@ -43,10 +43,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &4 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &4 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: body
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: text
       type: :text
       limit: 
@@ -57,10 +57,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &5 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &5 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: type
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: varchar
       type: :string
       limit: 
@@ -71,10 +71,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &6 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &6 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: comments_count
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -85,10 +85,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &7 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &7 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: taggings_with_delete_all_count
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -99,10 +99,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &8 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &8 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: taggings_with_destroy_count
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -113,10 +113,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &9 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &9 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: tags_count
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -127,10 +127,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &10 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &10 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: tags_with_destroy_count
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -141,10 +141,10 @@ columns:
     default_function: 
     collation: 
     comment: 
-  - &11 !ruby/object:SecondaryActiveRecord::ConnectionAdapters::Column
+  - &11 !ruby/object:ActiveRecord::ConnectionAdapters::Column
     name: tags_with_nullify_count
     table_name: posts
-    sql_type_metadata: !ruby/object:SecondaryActiveRecord::ConnectionAdapters::SqlTypeMetadata
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
       sql_type: integer
       type: :integer
       limit: 
@@ -316,7 +316,7 @@ data_sources:
   triangles: true
   non_poly_ones: true
   non_poly_twos: true
-  men: true
+  humans: true
   faces: true
   interests: true
   zines: true

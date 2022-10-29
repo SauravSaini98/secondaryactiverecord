@@ -4,7 +4,7 @@ require "cases/helper"
 require "models/lesson"
 require "models/student"
 
-class HabtmDestroyOrderTest < SecondaryActiveRecord::TestCase
+class HabtmDestroyOrderTest < ActiveRecord::TestCase
   test "may not delete a lesson with students" do
     sicp = Lesson.new(name: "SICP")
     ben = Student.new(name: "Ben Bitdiddle")
@@ -30,23 +30,21 @@ class HabtmDestroyOrderTest < SecondaryActiveRecord::TestCase
 
   test "not destroying a student with lessons leaves student<=>lesson association intact" do
     # test a normal before_destroy doesn't destroy the habtm joins
-    begin
-      sicp = Lesson.new(name: "SICP")
-      ben = Student.new(name: "Ben Bitdiddle")
-      # add a before destroy to student
-      Student.class_eval do
-        before_destroy do
-          raise SecondaryActiveRecord::Rollback unless lessons.empty?
-        end
+    sicp = Lesson.new(name: "SICP")
+    ben = Student.new(name: "Ben Bitdiddle")
+    # add a before destroy to student
+    Student.class_eval do
+      before_destroy do
+        raise ActiveRecord::Rollback unless lessons.empty?
       end
-      ben.lessons << sicp
-      ben.save!
-      ben.destroy
-      assert_not_empty ben.reload.lessons
-    ensure
-      # get rid of it so Student is still like it was
-      Student.reset_callbacks(:destroy)
     end
+    ben.lessons << sicp
+    ben.save!
+    ben.destroy
+    assert_not_empty ben.reload.lessons
+  ensure
+    # get rid of it so Student is still like it was
+    Student.reset_callbacks(:destroy)
   end
 
   test "not destroying a lesson with students leaves student<=>lesson association intact" do

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class Pirate < SecondaryActiveRecord::Base
+class Pirate < ActiveRecord::Base
   belongs_to :parrot, validate: true
   belongs_to :non_validated_parrot, class_name: "Parrot"
   has_and_belongs_to_many :parrots, -> { order("parrots.id ASC") }, validate: true
@@ -17,7 +17,13 @@ class Pirate < SecondaryActiveRecord::Base
     after_remove: proc { |p, pa| p.ship_log << "after_removing_proc_parrot_#{pa.id}" }
   has_and_belongs_to_many :autosaved_parrots, class_name: "Parrot", autosave: true
 
-  has_many :treasures, as: :looter
+  module PostTreasuresExtension
+    def build(attributes = {})
+      super({ name: "from extension" }.merge(attributes))
+    end
+  end
+
+  has_many :treasures, as: :looter, extend: PostTreasuresExtension
   has_many :treasure_estimates, through: :treasures, source: :price_estimates
 
   has_one :ship
@@ -37,6 +43,9 @@ class Pirate < SecondaryActiveRecord::Base
   has_many :birds_with_reject_all_blank, class_name: "Bird"
 
   has_one :foo_bulb, -> { where name: "foo" }, foreign_key: :car_id, class_name: "Bulb"
+
+  has_many :mateys, foreign_key: :pirate_id
+  has_one :attacker_matey, foreign_key: :target_id, class_name: "Matey"
 
   accepts_nested_attributes_for :parrots, :birds, allow_destroy: true, reject_if: proc(&:empty?)
   accepts_nested_attributes_for :ship, allow_destroy: true, reject_if: proc(&:empty?)
@@ -87,8 +96,24 @@ class DestructivePirate < Pirate
   has_one :dependent_ship, class_name: "Ship", foreign_key: :pirate_id, dependent: :destroy
 end
 
-class FamousPirate < SecondaryActiveRecord::Base
+class FamousPirate < ActiveRecord::Base
   self.table_name = "pirates"
-  has_many :famous_ships
+  has_many :famous_ships, inverse_of: :famous_pirate, foreign_key: :pirate_id
   validates_presence_of :catchphrase, on: :conference
+end
+
+class SpacePirate < ActiveRecord::Base
+  self.table_name = "pirates"
+
+  belongs_to :parrot
+  belongs_to :parrot_with_annotation, -> { annotate("that tells jokes") }, class_name: :Parrot, foreign_key: :parrot_id
+  has_and_belongs_to_many :parrots, foreign_key: :pirate_id
+  has_and_belongs_to_many :parrots_with_annotation, -> { annotate("that are very colorful") }, class_name: :Parrot, foreign_key: :pirate_id
+  has_one :ship, foreign_key: :pirate_id
+  has_one :ship_with_annotation, -> { annotate("that is a rocket") }, class_name: :Ship, foreign_key: :pirate_id
+  has_many :birds, foreign_key: :pirate_id
+  has_many :birds_with_annotation, -> { annotate("that are also parrots") }, class_name: :Bird, foreign_key: :pirate_id
+  has_many :treasures, as: :looter
+  has_many :treasure_estimates, through: :treasures, source: :price_estimates
+  has_many :treasure_estimates_with_annotation, -> { annotate("yarrr") }, through: :treasures, source: :price_estimates
 end

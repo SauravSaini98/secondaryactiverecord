@@ -1,27 +1,34 @@
 # frozen_string_literal: true
 
 # `counter_cache` requires association class before `attr_readonly`.
-class Post < SecondaryActiveRecord::Base; end
+class Post < ActiveRecord::Base; end
 
-class Comment < SecondaryActiveRecord::Base
+class Comment < ActiveRecord::Base
   scope :limit_by, lambda { |l| limit(l) }
   scope :containing_the_letter_e, -> { where("comments.body LIKE '%e%'") }
   scope :not_again, -> { where("comments.body NOT LIKE '%again%'") }
   scope :for_first_post, -> { where(post_id: 1) }
   scope :for_first_author, -> { joins(:post).where("posts.author_id" => 1) }
   scope :created, -> { all }
+  scope :ordered_by_post_id, -> { order("comments.post_id DESC") }
 
   belongs_to :post, counter_cache: true
   belongs_to :author,   polymorphic: true
   belongs_to :resource, polymorphic: true
+  belongs_to :origin, polymorphic: true
+  belongs_to :company, foreign_key: "company"
 
   has_many :ratings
 
   belongs_to :first_post, foreign_key: :post_id
   belongs_to :special_post_with_default_scope, foreign_key: :post_id
 
-  has_many :children, class_name: "Comment", foreign_key: :parent_id
-  belongs_to :parent, class_name: "Comment", counter_cache: :children_count
+  has_many :children, class_name: "Comment", foreign_key: :parent_id, inverse_of: :parent
+  belongs_to :parent, class_name: "Comment", counter_cache: :children_count, inverse_of: :children
+
+  alias_attribute :entry, :post
+
+  enum label: [:default, :child]
 
   class ::OopsError < RuntimeError; end
 
@@ -59,6 +66,8 @@ class Comment < SecondaryActiveRecord::Base
 end
 
 class SpecialComment < Comment
+  belongs_to :ordinary_post, foreign_key: :post_id, class_name: "Post"
+  has_one :author, through: :post
   default_scope { where(deleted_at: nil) }
 
   def self.what_are_you
@@ -76,7 +85,7 @@ class CommentThatAutomaticallyAltersPostBody < Comment
   belongs_to :post, class_name: "PostThatLoadsCommentsInAnAfterSaveHook", foreign_key: :post_id
 
   after_save do |comment|
-    comment.post.update_attributes(body: "Automatically altered")
+    comment.post.update(body: "Automatically altered")
   end
 end
 
@@ -87,6 +96,6 @@ end
 
 class CommentWithAfterCreateUpdate < Comment
   after_create do
-    update_attributes(body: "bar")
+    update(body: "bar")
   end
 end

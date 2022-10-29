@@ -2,10 +2,10 @@
 
 require "cases/helper"
 
-class Mixin < SecondaryActiveRecord::Base
+class Mixin < ActiveRecord::Base
 end
 
-class TouchTest < SecondaryActiveRecord::TestCase
+class TouchTest < ActiveRecord::TestCase
   fixtures :mixins
 
   setup do

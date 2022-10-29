@@ -5,7 +5,7 @@ require "models/comment"
 require "models/post"
 require "models/subscriber"
 
-class EachTest < SecondaryActiveRecord::TestCase
+class EachTest < ActiveRecord::TestCase
   fixtures :posts, :subscribers
 
   def setup
@@ -24,7 +24,7 @@ class EachTest < SecondaryActiveRecord::TestCase
 
   def test_each_should_not_return_query_chain_and_execute_only_one_query
     assert_queries(1) do
-      result = Post.find_each(batch_size: 100000) {}
+      result = Post.find_each(batch_size: 100000) { }
       assert_nil result
     end
   end
@@ -92,19 +92,19 @@ class EachTest < SecondaryActiveRecord::TestCase
   end
 
   def test_warn_if_order_scope_is_set
-    assert_called(SecondaryActiveRecord::Base.logger, :warn) do
+    assert_called(ActiveRecord::Base.logger, :warn) do
       Post.order("title").find_each { |post| post }
     end
   end
 
   def test_logger_not_required
-    previous_logger = SecondaryActiveRecord::Base.logger
-    SecondaryActiveRecord::Base.logger = nil
+    previous_logger = ActiveRecord::Base.logger
+    ActiveRecord::Base.logger = nil
     assert_nothing_raised do
       Post.order("comments_count DESC").find_each { |post| post }
     end
   ensure
-    SecondaryActiveRecord::Base.logger = previous_logger
+    ActiveRecord::Base.logger = previous_logger
   end
 
   def test_find_in_batches_should_return_batches
@@ -146,7 +146,7 @@ class EachTest < SecondaryActiveRecord::TestCase
 
   def test_find_in_batches_should_quote_batch_order
     c = Post.connection
-    assert_sql(/ORDER BY #{c.quote_table_name('posts')}\.#{c.quote_column_name('id')}/) do
+    assert_sql(/ORDER BY #{Regexp.escape(c.quote_table_name("posts.id"))}/i) do
       Post.find_in_batches(batch_size: 1) do |batch|
         assert_kind_of Array, batch
         assert_kind_of Post, batch.first
@@ -154,8 +154,26 @@ class EachTest < SecondaryActiveRecord::TestCase
     end
   end
 
+  def test_find_in_batches_should_quote_batch_order_with_desc_order
+    c = Post.connection
+    assert_sql(/ORDER BY #{Regexp.escape(c.quote_table_name("posts.id"))} DESC/) do
+      Post.find_in_batches(batch_size: 1, order: :desc) do |batch|
+        assert_kind_of Array, batch
+        assert_kind_of Post, batch.first
+      end
+    end
+  end
+
+  def test_each_should_raise_if_order_is_invalid
+    assert_raise(ArgumentError) do
+      Post.select(:title).find_each(batch_size: 1, order: :invalid) { |post|
+        flunk "should not call this block"
+      }
+    end
+  end
+
   def test_find_in_batches_should_not_use_records_after_yielding_them_in_case_original_array_is_modified
-    not_a_post = "not a post".dup
+    not_a_post = +"not a post"
     def not_a_post.id; end
     not_a_post.stub(:id, -> { raise StandardError.new("not_a_post had #id called on it") }) do
       assert_nothing_raised do
@@ -183,53 +201,47 @@ class EachTest < SecondaryActiveRecord::TestCase
 
   def test_find_in_batches_should_error_on_ignore_the_order
     assert_raise(ArgumentError) do
-      PostWithDefaultScope.find_in_batches(error_on_ignore: true) {}
+      PostWithDefaultScope.find_in_batches(error_on_ignore: true) { }
     end
   end
 
   def test_find_in_batches_should_not_error_if_config_overridden
     # Set the config option which will be overridden
-    prev = SecondaryActiveRecord::Base.error_on_ignored_order
-    SecondaryActiveRecord::Base.error_on_ignored_order = true
+    prev = ActiveRecord.error_on_ignored_order
+    ActiveRecord.error_on_ignored_order = true
     assert_nothing_raised do
-      PostWithDefaultScope.find_in_batches(error_on_ignore: false) {}
+      PostWithDefaultScope.find_in_batches(error_on_ignore: false) { }
     end
   ensure
     # Set back to default
-    SecondaryActiveRecord::Base.error_on_ignored_order = prev
+    ActiveRecord.error_on_ignored_order = prev
   end
 
   def test_find_in_batches_should_error_on_config_specified_to_error
     # Set the config option
-    prev = SecondaryActiveRecord::Base.error_on_ignored_order
-    SecondaryActiveRecord::Base.error_on_ignored_order = true
+    prev = ActiveRecord.error_on_ignored_order
+    ActiveRecord.error_on_ignored_order = true
     assert_raise(ArgumentError) do
-      PostWithDefaultScope.find_in_batches() {}
+      PostWithDefaultScope.find_in_batches() { }
     end
   ensure
     # Set back to default
-    SecondaryActiveRecord::Base.error_on_ignored_order = prev
+    ActiveRecord.error_on_ignored_order = prev
   end
 
   def test_find_in_batches_should_not_error_by_default
     assert_nothing_raised do
-      PostWithDefaultScope.find_in_batches() {}
+      PostWithDefaultScope.find_in_batches() { }
     end
   end
 
   def test_find_in_batches_should_not_ignore_the_default_scope_if_it_is_other_then_order
-    special_posts_ids = SpecialPostWithDefaultScope.all.map(&:id).sort
+    default_scope = SpecialPostWithDefaultScope.all
     posts = []
     SpecialPostWithDefaultScope.find_in_batches do |batch|
       posts.concat(batch)
     end
-    assert_equal special_posts_ids, posts.map(&:id)
-  end
-
-  def test_find_in_batches_should_not_modify_passed_options
-    assert_nothing_raised do
-      Post.find_in_batches({ batch_size: 42, start: 1 }.freeze) {}
-    end
+    assert_equal default_scope.pluck(:id).sort, posts.map(&:id).sort
   end
 
   def test_find_in_batches_should_use_any_column_as_primary_key
@@ -290,14 +302,22 @@ class EachTest < SecondaryActiveRecord::TestCase
 
   def test_in_batches_should_not_execute_any_query
     assert_no_queries do
-      assert_kind_of SecondaryActiveRecord::Batches::BatchEnumerator, Post.in_batches(of: 2)
+      assert_kind_of ActiveRecord::Batches::BatchEnumerator, Post.in_batches(of: 2)
     end
+  end
+
+  def test_in_batches_has_attribute_readers
+    enumerator = Post.no_comments.in_batches(of: 2, start: 42, finish: 84)
+    assert_equal Post.no_comments, enumerator.relation
+    assert_equal 2, enumerator.batch_size
+    assert_equal 42, enumerator.start
+    assert_equal 84, enumerator.finish
   end
 
   def test_in_batches_should_yield_relation_if_block_given
     assert_queries(6) do
       Post.in_batches(of: 2) do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
       end
     end
   end
@@ -305,7 +325,7 @@ class EachTest < SecondaryActiveRecord::TestCase
   def test_in_batches_should_be_enumerable_if_no_block_given
     assert_queries(6) do
       Post.in_batches(of: 2).each do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
       end
     end
   end
@@ -344,11 +364,27 @@ class EachTest < SecondaryActiveRecord::TestCase
     assert_equal Post.all.pluck(:title), ["updated-title"] * Post.count
   end
 
+  def test_in_batches_update_all_returns_rows_affected
+    assert_equal 11, Post.in_batches(of: 2).update_all(title: "updated-title")
+  end
+
+  def test_in_batches_update_all_returns_zero_when_no_batches
+    assert_equal 0, Post.where("1=0").in_batches(of: 2).update_all(title: "updated-title")
+  end
+
   def test_in_batches_delete_all_should_not_delete_records_in_other_batches
     not_deleted_count = Post.where("id <= 2").count
     Post.where("id > 2").in_batches(of: 2).delete_all
     assert_equal 0, Post.where("id > 2").count
     assert_equal not_deleted_count, Post.count
+  end
+
+  def test_in_batches_delete_all_returns_rows_affected
+    assert_equal 11, Post.in_batches(of: 2).delete_all
+  end
+
+  def test_in_batches_delete_all_returns_zero_when_no_batches
+    assert_equal 0, Post.where("1=0").in_batches(of: 2).delete_all
   end
 
   def test_in_batches_should_not_be_loaded
@@ -378,7 +414,7 @@ class EachTest < SecondaryActiveRecord::TestCase
   def test_in_batches_should_return_relations
     assert_queries(@total + 1) do
       Post.in_batches(of: 1) do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
       end
     end
   end
@@ -401,11 +437,11 @@ class EachTest < SecondaryActiveRecord::TestCase
 
   def test_in_batches_shouldnt_execute_query_unless_needed
     assert_queries(2) do
-      Post.in_batches(of: @total) { |relation| assert_kind_of SecondaryActiveRecord::Relation, relation }
+      Post.in_batches(of: @total) { |relation| assert_kind_of ActiveRecord::Relation, relation }
     end
 
     assert_queries(1) do
-      Post.in_batches(of: @total + 1) { |relation| assert_kind_of SecondaryActiveRecord::Relation, relation }
+      Post.in_batches(of: @total + 1) { |relation| assert_kind_of ActiveRecord::Relation, relation }
     end
   end
 
@@ -413,41 +449,45 @@ class EachTest < SecondaryActiveRecord::TestCase
     c = Post.connection
     assert_sql(/ORDER BY #{c.quote_table_name('posts')}\.#{c.quote_column_name('id')}/) do
       Post.in_batches(of: 1) do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
+        assert_kind_of Post, relation.first
+      end
+    end
+  end
+
+  def test_in_batches_should_quote_batch_order_with_desc_order
+    c = Post.connection
+    assert_sql(/ORDER BY #{Regexp.escape(c.quote_table_name("posts.id"))} DESC/) do
+      Post.in_batches(of: 1, order: :desc) do |relation|
+        assert_kind_of ActiveRecord::Relation, relation
         assert_kind_of Post, relation.first
       end
     end
   end
 
   def test_in_batches_should_not_use_records_after_yielding_them_in_case_original_array_is_modified
-    not_a_post = "not a post".dup
+    not_a_post = +"not a post"
     def not_a_post.id
       raise StandardError.new("not_a_post had #id called on it")
     end
 
     assert_nothing_raised do
       Post.in_batches(of: 1) do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
         assert_kind_of Post, relation.first
 
-        relation = [not_a_post] * relation.count
+        [not_a_post] * relation.count
       end
     end
   end
 
   def test_in_batches_should_not_ignore_default_scope_without_order_statements
-    special_posts_ids = SpecialPostWithDefaultScope.all.map(&:id).sort
+    default_scope = SpecialPostWithDefaultScope.all
     posts = []
     SpecialPostWithDefaultScope.in_batches do |relation|
       posts.concat(relation)
     end
-    assert_equal special_posts_ids, posts.map(&:id)
-  end
-
-  def test_in_batches_should_not_modify_passed_options
-    assert_nothing_raised do
-      Post.in_batches({ of: 42, start: 1 }.freeze) {}
-    end
+    assert_equal default_scope.pluck(:id).sort, posts.map(&:id).sort
   end
 
   def test_in_batches_should_use_any_column_as_primary_key
@@ -465,7 +505,7 @@ class EachTest < SecondaryActiveRecord::TestCase
   def test_in_batches_should_use_any_column_as_primary_key_when_start_is_not_specified
     assert_queries(Subscriber.count + 1) do
       Subscriber.in_batches(of: 1, load: true) do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
         assert_kind_of Subscriber, relation.first
       end
     end
@@ -478,7 +518,7 @@ class EachTest < SecondaryActiveRecord::TestCase
     end
     assert_queries(4) do
       enum.first(4) do |relation|
-        assert_kind_of SecondaryActiveRecord::Relation, relation
+        assert_kind_of ActiveRecord::Relation, relation
         assert_kind_of Post, relation.first
       end
     end
@@ -508,7 +548,7 @@ class EachTest < SecondaryActiveRecord::TestCase
   def test_in_batches_relations_update_all_should_not_affect_matching_records_in_other_batches
     Post.update_all(author_id: 0)
     person = Post.last
-    person.update_attributes(author_id: 1)
+    person.update(author_id: 1)
 
     Post.in_batches(of: 2) do |batch|
       batch.where("author_id >= 1").update_all("author_id = author_id + 1")
@@ -589,23 +629,23 @@ class EachTest < SecondaryActiveRecord::TestCase
   test ".find_each respects table alias" do
     assert_queries(1) do
       table_alias = Post.arel_table.alias("omg_posts")
-      table_metadata = SecondaryActiveRecord::TableMetadata.new(Post, table_alias)
-      predicate_builder = SecondaryActiveRecord::PredicateBuilder.new(table_metadata)
+      table_metadata = ActiveRecord::TableMetadata.new(Post, table_alias)
+      predicate_builder = ActiveRecord::PredicateBuilder.new(table_metadata)
 
-      posts = SecondaryActiveRecord::Relation.create(
+      posts = ActiveRecord::Relation.create(
         Post,
         table: table_alias,
         predicate_builder: predicate_builder
       )
-      posts.find_each {}
+      posts.find_each { }
     end
   end
 
   test ".find_each bypasses the query cache for its own queries" do
     Post.cache do
       assert_queries(2) do
-        Post.find_each {}
-        Post.find_each {}
+        Post.find_each { }
+        Post.find_each { }
       end
     end
   end
@@ -624,8 +664,8 @@ class EachTest < SecondaryActiveRecord::TestCase
   test ".find_in_batches bypasses the query cache for its own queries" do
     Post.cache do
       assert_queries(2) do
-        Post.find_in_batches {}
-        Post.find_in_batches {}
+        Post.find_in_batches { }
+        Post.find_in_batches { }
       end
     end
   end
@@ -644,8 +684,8 @@ class EachTest < SecondaryActiveRecord::TestCase
   test ".in_batches bypasses the query cache for its own queries" do
     Post.cache do
       assert_queries(2) do
-        Post.in_batches {}
-        Post.in_batches {}
+        Post.in_batches { }
+        Post.in_batches { }
       end
     end
   end

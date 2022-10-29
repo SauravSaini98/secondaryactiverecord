@@ -1,19 +1,19 @@
 # frozen_string_literal: true
 
 module Shop
-  class Collection < SecondaryActiveRecord::Base
+  class Collection < ActiveRecord::Base
     has_many :products, dependent: :nullify
   end
 
-  class Product < SecondaryActiveRecord::Base
+  class Product < ActiveRecord::Base
     has_many :variants, dependent: :delete_all
     belongs_to :type
 
-    class Type < SecondaryActiveRecord::Base
+    class Type < ActiveRecord::Base
       has_many :products
     end
   end
 
-  class Variant < SecondaryActiveRecord::Base
+  class Variant < ActiveRecord::Base
   end
 end

@@ -3,11 +3,11 @@
 require "cases/helper"
 require "support/schema_dumping_helper"
 
-class Mysql2AutoIncrementTest < SecondaryActiveRecord::Mysql2TestCase
+class Mysql2AutoIncrementTest < ActiveRecord::Mysql2TestCase
   include SchemaDumpingHelper
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   def teardown

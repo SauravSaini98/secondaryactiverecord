@@ -3,12 +3,12 @@
 require "cases/helper"
 require "support/connection_helper"
 
-class HotCompatibilityTest < SecondaryActiveRecord::TestCase
+class HotCompatibilityTest < ActiveRecord::TestCase
   self.use_transactional_tests = false
   include ConnectionHelper
 
   setup do
-    @klass = Class.new(SecondaryActiveRecord::Base) do
+    @klass = Class.new(ActiveRecord::Base) do
       connection.create_table :hot_compatibilities, force: true do |t|
         t.string :foo
         t.string :bar
@@ -19,7 +19,7 @@ class HotCompatibilityTest < SecondaryActiveRecord::TestCase
   end
 
   teardown do
-    SecondaryActiveRecord::Base.connection.drop_table :hot_compatibilities
+    ActiveRecord::Base.connection.drop_table :hot_compatibilities
   end
 
   test "insert after remove_column" do
@@ -56,7 +56,7 @@ class HotCompatibilityTest < SecondaryActiveRecord::TestCase
     assert_equal "bar", record.foo
   end
 
-  if current_adapter?(:PostgreSQLAdapter)
+  if current_adapter?(:PostgreSQLAdapter) && ActiveRecord::Base.connection.prepared_statements
     test "cleans up after prepared statement failure in a transaction" do
       with_two_connections do |original_connection, ddl_connection|
         record = @klass.create! bar: "bar"
@@ -72,7 +72,7 @@ class HotCompatibilityTest < SecondaryActiveRecord::TestCase
         # add a new column
         ddl_connection.add_column :hot_compatibilities, :baz, :string
 
-        assert_raise(SecondaryActiveRecord::PreparedStatementCacheExpired) do
+        assert_raise(ActiveRecord::PreparedStatementCacheExpired) do
           @klass.transaction do
             record.reload
           end
@@ -98,7 +98,7 @@ class HotCompatibilityTest < SecondaryActiveRecord::TestCase
         # add a new column
         ddl_connection.add_column :hot_compatibilities, :baz, :string
 
-        assert_raise(SecondaryActiveRecord::PreparedStatementCacheExpired) do
+        assert_raise(ActiveRecord::PreparedStatementCacheExpired) do
           @klass.transaction do
             @klass.transaction do
               @klass.transaction do
@@ -115,7 +115,6 @@ class HotCompatibilityTest < SecondaryActiveRecord::TestCase
   end
 
   private
-
     def get_prepared_statement_cache(connection)
       connection.instance_variable_get(:@statements)
         .instance_variable_get(:@cache)[Process.pid]
@@ -128,16 +127,16 @@ class HotCompatibilityTest < SecondaryActiveRecord::TestCase
     # connection in a web worker.
     def with_two_connections
       run_without_connection do |original_connection|
-        SecondaryActiveRecord::Base.establish_connection(original_connection.merge(pool_size: 2))
+        ActiveRecord::Base.establish_connection(original_connection.merge(pool_size: 2))
         begin
-          ddl_connection = SecondaryActiveRecord::Base.connection_pool.checkout
+          ddl_connection = ActiveRecord::Base.connection_pool.checkout
           begin
             yield original_connection, ddl_connection
           ensure
-            SecondaryActiveRecord::Base.connection_pool.checkin ddl_connection
+            ActiveRecord::Base.connection_pool.checkin ddl_connection
           end
         ensure
-          SecondaryActiveRecord::Base.clear_all_connections!
+          ActiveRecord::Base.clear_all_connections!
         end
       end
     end

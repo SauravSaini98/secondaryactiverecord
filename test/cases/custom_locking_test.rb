@@ -3,8 +3,8 @@
 require "cases/helper"
 require "models/person"
 
-module SecondaryActiveRecord
-  class CustomLockingTest < SecondaryActiveRecord::TestCase
+module ActiveRecord
+  class CustomLockingTest < ActiveRecord::TestCase
     fixtures :people
 
     def test_custom_lock

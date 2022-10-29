@@ -2,16 +2,16 @@
 
 require "cases/helper"
 
-module SecondaryActiveRecord
+module ActiveRecord
   class Migration
-    class ColumnPositioningTest < SecondaryActiveRecord::TestCase
+    class ColumnPositioningTest < ActiveRecord::TestCase
       attr_reader :connection
       alias :conn :connection
 
       def setup
         super
 
-        @connection = SecondaryActiveRecord::Base.connection
+        @connection = ActiveRecord::Base.connection
 
         connection.create_table :testings, id: false do |t|
           t.column :first, :integer
@@ -22,7 +22,7 @@ module SecondaryActiveRecord
 
       teardown do
         connection.drop_table :testings rescue nil
-        SecondaryActiveRecord::Base.primary_key_prefix_type = nil
+        ActiveRecord::Base.primary_key_prefix_type = nil
       end
 
       if current_adapter?(:Mysql2Adapter)

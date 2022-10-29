@@ -3,13 +3,13 @@
 require "cases/helper"
 require "models/topic"
 require "models/reply"
-require "models/person"
 require "models/developer"
 require "models/computer"
 require "models/parrot"
 require "models/company"
+require "models/price_estimate"
 
-class ValidationsTest < SecondaryActiveRecord::TestCase
+class ValidationsTest < ActiveRecord::TestCase
   fixtures :topics, :developers
 
   # Most of the tests mess with the validations of Topic, so lets repair it all the time.
@@ -39,7 +39,7 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
 
   def test_valid_using_special_context
     r = WrongReply.new(title: "Valid title")
-    assert !r.valid?(:special_case)
+    assert_not r.valid?(:special_case)
     assert_equal "Invalid", r.errors[:author_name].join
 
     r.author_name = "secret"
@@ -77,24 +77,24 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_invalid_record_exception
-    assert_raise(SecondaryActiveRecord::RecordInvalid) { WrongReply.create! }
-    assert_raise(SecondaryActiveRecord::RecordInvalid) { WrongReply.new.save! }
+    assert_raise(ActiveRecord::RecordInvalid) { WrongReply.create! }
+    assert_raise(ActiveRecord::RecordInvalid) { WrongReply.new.save! }
 
     r = WrongReply.new
-    invalid = assert_raise SecondaryActiveRecord::RecordInvalid do
+    invalid = assert_raise ActiveRecord::RecordInvalid do
       r.save!
     end
     assert_equal r, invalid.record
   end
 
   def test_validate_with_bang
-    assert_raise(SecondaryActiveRecord::RecordInvalid) do
+    assert_raise(ActiveRecord::RecordInvalid) do
       WrongReply.new.validate!
     end
   end
 
   def test_validate_with_bang_and_context
-    assert_raise(SecondaryActiveRecord::RecordInvalid) do
+    assert_raise(ActiveRecord::RecordInvalid) do
       WrongReply.new.validate!(:special_case)
     end
     r = WrongReply.new(title: "Valid title", author_name: "secret", content: "Good")
@@ -102,13 +102,13 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_exception_on_create_bang_many
-    assert_raise(SecondaryActiveRecord::RecordInvalid) do
+    assert_raise(ActiveRecord::RecordInvalid) do
       WrongReply.create!([ { "title" => "OK" }, { "title" => "Wrong Create" }])
     end
   end
 
   def test_exception_on_create_bang_with_block
-    assert_raise(SecondaryActiveRecord::RecordInvalid) do
+    assert_raise(ActiveRecord::RecordInvalid) do
       WrongReply.create!("title" => "OK") do |r|
         r.content = nil
       end
@@ -116,7 +116,7 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
   end
 
   def test_exception_on_create_bang_many_with_block
-    assert_raise(SecondaryActiveRecord::RecordInvalid) do
+    assert_raise(ActiveRecord::RecordInvalid) do
       WrongReply.create!([{ "title" => "OK" }, { "title" => "Wrong Create" }]) do |r|
         r.content = nil
       end
@@ -125,12 +125,12 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
 
   def test_save_without_validation
     reply = WrongReply.new
-    assert !reply.save
+    assert_not reply.save
     assert reply.save(validate: false)
   end
 
   def test_validates_acceptance_of_with_non_existent_table
-    Object.const_set :IncorporealModel, Class.new(SecondaryActiveRecord::Base)
+    Object.const_set :IncorporealModel, Class.new(ActiveRecord::Base)
 
     assert_nothing_raised do
       IncorporealModel.validates_acceptance_of(:incorporeal_column)
@@ -144,9 +144,18 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
     assert_equal "100,000", d.salary_before_type_cast
   end
 
+  def test_validates_acceptance_of_with_undefined_attribute_methods
+    klass = Class.new(Topic)
+    klass.validates_acceptance_of(:approved)
+    topic = klass.new(approved: true)
+    klass.undefine_attribute_methods
+    assert topic.approved
+  end
+
   def test_validates_acceptance_of_as_database_column
-    Topic.validates_acceptance_of(:approved)
-    topic = Topic.create("approved" => true)
+    klass = Class.new(Topic)
+    klass.validates_acceptance_of(:approved)
+    topic = klass.create("approved" => true)
     assert topic["approved"]
   end
 
@@ -178,13 +187,37 @@ class ValidationsTest < SecondaryActiveRecord::TestCase
       validates_numericality_of :wibble, greater_than_or_equal_to: BigDecimal("97.18")
     end
 
-    assert_not_predicate klass.new(wibble: "97.179"), :valid?
-    assert_not_predicate klass.new(wibble: 97.179), :valid?
-    assert_not_predicate klass.new(wibble: BigDecimal("97.179")), :valid?
+    ["97.179", 97.179, BigDecimal("97.179")].each do |raw_value|
+      subject = klass.new(wibble: raw_value)
+      assert_equal BigDecimal("97.18"), subject.wibble
+      assert_predicate subject, :valid?
+    end
+
+    ["97.174", 97.174, BigDecimal("97.174")].each do |raw_value|
+      subject = klass.new(wibble: raw_value)
+      assert_equal BigDecimal("97.17"), subject.wibble
+      assert_not_predicate subject, :valid?
+    end
+  end
+
+  def test_numericality_validator_wont_be_affected_by_custom_getter
+    price_estimate = PriceEstimate.new(price: 50)
+
+    assert_equal "$50.00", price_estimate.price
+    assert_equal 50, price_estimate.price_before_type_cast
+    assert_equal 50, price_estimate.read_attribute(:price)
+
+    assert_predicate price_estimate, :price_came_from_user?
+    assert_predicate price_estimate, :valid?
+
+    price_estimate.save!
+
+    assert_not_predicate price_estimate, :price_came_from_user?
+    assert_predicate price_estimate, :valid?
   end
 
   def test_acceptance_validator_doesnt_require_db_connection
-    klass = Class.new(SecondaryActiveRecord::Base) do
+    klass = Class.new(ActiveRecord::Base) do
       self.table_name = "posts"
     end
     klass.reset_column_information

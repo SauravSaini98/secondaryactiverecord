@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class WeNeedReminders < SecondaryActiveRecord::Migration::Current
+class WeNeedReminders < ActiveRecord::Migration::Current
   def self.up
     create_table("reminders") do |t|
       t.column :content, :text

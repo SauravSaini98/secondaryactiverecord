@@ -3,20 +3,23 @@
 require "cases/helper"
 require "support/ddl_helper"
 
-class PostgresqlTime < SecondaryActiveRecord::Base
+class PostgresqlTime < ActiveRecord::Base
+  # Declare attributes to get rid from deprecation warnings on ActiveRecord 6.1
+  attribute :time_interval,        :string
+  attribute :scaled_time_interval, :interval
 end
 
-class PostgresqlOid < SecondaryActiveRecord::Base
+class PostgresqlOid < ActiveRecord::Base
 end
 
-class PostgresqlLtree < SecondaryActiveRecord::Base
+class PostgresqlLtree < ActiveRecord::Base
 end
 
-class PostgresqlDataTypeTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlDataTypeTest < ActiveRecord::PostgreSQLTestCase
   self.use_transactional_tests = false
 
   def setup
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
 
     @connection.execute("INSERT INTO postgresql_times (id, time_interval, scaled_time_interval) VALUES (1, '1 year 2 days ago', '3 weeks ago')")
     @first_time = PostgresqlTime.find(1)
@@ -39,23 +42,16 @@ class PostgresqlDataTypeTest < SecondaryActiveRecord::PostgreSQLTestCase
   end
 
   def test_time_values
-    assert_equal "-1 years -2 days", @first_time.time_interval
-    assert_equal "-21 days", @first_time.scaled_time_interval
+    assert_equal "P-1Y-2D", @first_time.time_interval
+    assert_equal (-21.day), @first_time.scaled_time_interval
   end
 
   def test_oid_values
     assert_equal 1234, @first_oid.obj_id
   end
 
-  def test_update_time
-    @first_time.time_interval = "2 years 3 minutes"
-    assert @first_time.save
-    assert @first_time.reload
-    assert_equal "2 years 00:03:00", @first_time.time_interval
-  end
-
   def test_update_oid
-    new_value = 567890
+    new_value = 2147483648
     @first_oid.obj_id = new_value
     assert @first_oid.save
     assert @first_oid.reload
@@ -64,17 +60,17 @@ class PostgresqlDataTypeTest < SecondaryActiveRecord::PostgreSQLTestCase
 
   def test_text_columns_are_limitless_the_upper_limit_is_one_GB
     assert_equal "text", @connection.type_to_sql(:text, limit: 100_000)
-    assert_raise SecondaryActiveRecord::ActiveRecordError do
+    assert_raise ArgumentError do
       @connection.type_to_sql(:text, limit: 4294967295)
     end
   end
 end
 
-class PostgresqlInternalDataTypeTest < SecondaryActiveRecord::PostgreSQLTestCase
+class PostgresqlInternalDataTypeTest < ActiveRecord::PostgreSQLTestCase
   include DdlHelper
 
   setup do
-    @connection = SecondaryActiveRecord::Base.connection
+    @connection = ActiveRecord::Base.connection
   end
 
   def test_name_column_type

@@ -3,17 +3,21 @@
 require "cases/helper"
 require "models/topic"
 
-class I18nGenerateMessageValidationTest < SecondaryActiveRecord::TestCase
+class I18nGenerateMessageValidationTest < ActiveRecord::TestCase
+  class Backend < I18n::Backend::Simple
+    include I18n::Backend::Fallbacks
+  end
+
   def setup
     Topic.clear_validators!
     @topic = Topic.new
-    I18n.backend = I18n::Backend::Simple.new
+    I18n.backend = Backend.new
   end
 
   def reset_i18n_load_path
     @old_load_path, @old_backend = I18n.load_path.dup, I18n.backend
     I18n.load_path.clear
-    I18n.backend = I18n::Backend::Simple.new
+    I18n.backend = Backend.new
     yield
   ensure
     I18n.load_path.replace @old_load_path
@@ -38,13 +42,13 @@ class I18nGenerateMessageValidationTest < SecondaryActiveRecord::TestCase
     assert_equal "custom message title", @topic.errors.generate_message(:title, :taken, message: "custom message %{value}", value: "title")
   end
 
-  # SecondaryActiveRecord#RecordInvalid exception
+  # ActiveRecord#RecordInvalid exception
 
   test "RecordInvalid exception can be localized" do
     topic = Topic.new
     topic.errors.add(:title, :invalid)
     topic.errors.add(:title, :blank)
-    assert_equal "Validation failed: Title is invalid, Title can't be blank", SecondaryActiveRecord::RecordInvalid.new(topic).message
+    assert_equal "Validation failed: Title is invalid, Title can't be blank", ActiveRecord::RecordInvalid.new(topic).message
   end
 
   test "RecordInvalid exception translation falls back to the :errors namespace" do
@@ -52,7 +56,7 @@ class I18nGenerateMessageValidationTest < SecondaryActiveRecord::TestCase
       I18n.backend.store_translations "en", errors: { messages: { record_invalid: "fallback message" } }
       topic = Topic.new
       topic.errors.add(:title, :blank)
-      assert_equal "fallback message", SecondaryActiveRecord::RecordInvalid.new(topic).message
+      assert_equal "fallback message", ActiveRecord::RecordInvalid.new(topic).message
     end
   end
 
@@ -81,6 +85,18 @@ class I18nGenerateMessageValidationTest < SecondaryActiveRecord::TestCase
     reset_i18n_load_path do
       I18n.backend.store_translations "en", activerecord: { errors: { models: { topic: { attributes: { title: { taken: "Custom taken message" } } } } } }
       assert_equal "Custom taken message", @topic.errors.generate_message(:title, :taken, value: "title")
+    end
+  end
+
+  test "activerecord attributes scope falls back to parent locale before it falls back to the :errors namespace" do
+    reset_i18n_load_path do
+      I18n.backend.store_translations "en", activerecord: { errors: { models: { topic: { attributes: { title: { taken: "custom en message" } } } } } }
+      I18n.backend.store_translations "en-US", errors: { messages: { taken: "generic en-US fallback" } }
+
+      I18n.with_locale "en-US" do
+        assert_equal "custom en message", @topic.errors.generate_message(:title, :taken, value: "title")
+        assert_equal "generic en-US fallback", @topic.errors.generate_message(:heading, :taken, value: "heading")
+      end
     end
   end
 end

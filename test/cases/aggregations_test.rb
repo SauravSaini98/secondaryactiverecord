@@ -3,7 +3,7 @@
 require "cases/helper"
 require "models/customer"
 
-class AggregationsTest < SecondaryActiveRecord::TestCase
+class AggregationsTest < ActiveRecord::TestCase
   fixtures :customers
 
   def test_find_single_value_object
@@ -27,7 +27,7 @@ class AggregationsTest < SecondaryActiveRecord::TestCase
 
   def test_immutable_value_objects
     customers(:david).balance = Money.new(100)
-    assert_raise(frozen_error_class) { customers(:david).balance.instance_eval { @amount = 20 } }
+    assert_raise(FrozenError) { customers(:david).balance.instance_eval { @amount = 20 } }
   end
 
   def test_inferred_mapping
@@ -152,10 +152,10 @@ class AggregationsTest < SecondaryActiveRecord::TestCase
   end
 end
 
-class OverridingAggregationsTest < SecondaryActiveRecord::TestCase
+class OverridingAggregationsTest < ActiveRecord::TestCase
   class DifferentName; end
 
-  class Person < SecondaryActiveRecord::Base
+  class Person < ActiveRecord::Base
     composed_of :composed_of, mapping: %w(person_first_name first_name)
   end
 

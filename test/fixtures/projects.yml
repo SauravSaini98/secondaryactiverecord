@@ -1,0 +1,7 @@
+action_controller:
+  id: 2
+  name: Active Controller
+
+secondary_active_record:
+  id: 1
+  name: Secondary Active Record

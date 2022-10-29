@@ -1,0 +1,7 @@
+george_blackbeard:
+  parrot_id: <%= SecondaryActiveRecord::FixtureSet.identify(:george) %>
+  pirate_id: <%= SecondaryActiveRecord::FixtureSet.identify(:blackbeard) %>
+
+louis_blackbeard:
+  parrot_id: <%= SecondaryActiveRecord::FixtureSet.identify(:louis) %>
+  pirate_id: <%= SecondaryActiveRecord::FixtureSet.identify(:blackbeard) %>
